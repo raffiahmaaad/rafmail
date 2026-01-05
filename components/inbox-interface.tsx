@@ -17,6 +17,7 @@ interface Email {
   text: string;
   html: string;
   receivedAt: string;
+  to: string;
 }
 
 export function InboxInterface() {
