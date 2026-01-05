@@ -47,13 +47,34 @@ export async function POST(req: Request) {
 
     const key = `inbox:${cleanTo}`;
     
+    // Check for custom retention settings
+    const settingsKey = `settings:${cleanTo}`;
+    const settingsRaw = await redis.get(settingsKey);
+    let retention = 86400; // Default 24h
+
+    if (settingsRaw) {
+        try {
+            // If stored as JSON string
+            if (typeof settingsRaw === 'string') {
+                 const s = JSON.parse(settingsRaw);
+                 if (s.retentionSeconds) retention = s.retentionSeconds;
+            } else if (typeof settingsRaw === 'object') {
+                 // Upstash REST client might return object directly if auto-deserializing
+                 const s = settingsRaw as any;
+                 if (s.retentionSeconds) retention = s.retentionSeconds;
+            }
+        } catch (e) {
+            console.error("Failed to parse settings", e);
+        }
+    }
+    
     // Store email in a list (LIFO usually better for email? No, Redis list is generic. lpush = prepend)
     // lpush puts new emails at index 0.
     await redis.lpush(key, emailData);
     
-    // Set expiry to 24 hours (86400 seconds)
+    // Set expiry based on retention setting
     // Note: expire only works on the key, so it refreshes the whole list TTL.
-    await redis.expire(key, 86400);
+    await redis.expire(key, retention);
 
     return NextResponse.json({ success: true, id: emailId });
   } catch (error) {

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { RefreshCw, Copy, Mail, Loader2, ArrowRight, Trash2, Shield, Globe, History, ChevronDown, X } from 'lucide-react';
+import { RefreshCw, Copy, Mail, Loader2, ArrowRight, Trash2, Shield, Globe, History, ChevronDown, X, Settings2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -20,7 +20,7 @@ interface Email {
   to: string;
 }
 
-import { AddDomainDialog } from './add-domain-dialog';
+import { SettingsDialog, RETENTION_OPTIONS } from './settings-dialog';
 
 interface InboxInterfaceProps {
     initialAddress?: string;
@@ -37,11 +37,13 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
   const [history, setHistory] = useState<string[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [isAddDomainOpen, setIsAddDomainOpen] = useState(false);
+  const [retention, setRetention] = useState<number>(86400);
 
   // Load saved data
   useEffect(() => {
     const savedDoms = localStorage.getItem('dispo_domains');
     const savedHist = localStorage.getItem('dispo_history');
+    const savedRet = localStorage.getItem('dispo_default_retention');
     
     if (savedDoms) {
         setSavedDomains(JSON.parse(savedDoms));
@@ -51,6 +53,7 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
     }
 
     if (savedHist) setHistory(JSON.parse(savedHist));
+    if (savedRet) setRetention(parseInt(savedRet));
 
     if (!initialAddress) {
         const saved = localStorage.getItem('dispo_address');
@@ -160,7 +163,7 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
               Your Temporary Inbox
             </h2>
             <p className="text-muted-foreground text-sm">
-              Waiting for emails at this address. Messages auto-delete after 24h.
+              Waiting for emails at this address. Messages auto-delete after <span className="text-purple-400 font-medium">{RETENTION_OPTIONS.find(o => o.value === retention)?.label || '24 Hours'}</span>.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -197,115 +200,139 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
                         value={domain}
                         onChange={(e) => {
                             const newDomain = e.target.value;
-                            if (newDomain === 'add_new') {
-                                setIsAddDomainOpen(true);
-                            } else {
-                                setDomain(newDomain);
-                                const currentUser = address.split('@')[0];
-                                const newAddr = `${currentUser}@${newDomain}`;
-                                setAddress(newAddr);
-                                localStorage.setItem('dispo_address', newAddr);
-                                addToHistory(newAddr);
-                            }
+                            setDomain(newDomain);
+                            const currentUser = address.split('@')[0];
+                            const newAddr = `${currentUser}@${newDomain}`;
+                            setAddress(newAddr);
+                            localStorage.setItem('dispo_address', newAddr);
+                            addToHistory(newAddr);
                         }}
                         className="w-full h-12 pl-3 pr-8 rounded-md border border-white/10 bg-black/20 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 appearance-none glass"
                     >
                         {savedDomains.map((d) => (
-                            <option key={d} value={d} className="bg-slate-900">{d}</option>
+                            <option key={d} value={d} className="bg-slate-900 font-mono">{d}</option>
                         ))}
-                        <option value="add_new" className="bg-slate-900 font-bold text-blue-400">+ Add Domain</option>
                     </select>
                     <ArrowRight className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-50 pointer-events-none rotate-90" />
                  </div>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            {/* Settings Button */}
+            <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsAddDomainOpen(true)}
+                className="h-12 w-12 border border-white/10 hover:bg-white/5 text-purple-400 hover:text-purple-300"
+                title="Settings"
+            >
+                <Settings2 className="h-5 w-5" />
+            </Button>
+
             <div className="relative">
                 <Button 
                     onClick={() => setShowHistory(!showHistory)} 
                     variant="ghost" 
                     size="icon" 
-                    className={cn("h-12 w-12 border border-white/10 hover:bg-white/5", showHistory && "bg-white/10")}
+                    className={cn("h-12 w-12 border border-white/10 hover:bg-white/5 relative", showHistory && "bg-white/10 ring-2 ring-white/10")}
+                    title="History"
                 >
-                    <History className="h-4 w-4" />
+                    <History className="h-5 w-5" />
+                    {history.length > 0 && (
+                        <span className="absolute top-2 right-2 h-2 w-2 bg-blue-500 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
+                    )}
                 </Button>
                 
                 <AnimatePresence>
                     {showHistory && (
-                        <motion.div
-                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                            className="absolute right-0 top-14 w-64 glass-card rounded-xl p-2 z-50 border border-white/10 shadow-2xl"
-                        >
-                            <div className="flex justify-between items-center px-2 py-1 mb-1 text-xs text-muted-foreground uppercase font-bold tracking-wider">
-                                <span>Recent</span>
-                                <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => setShowHistory(false)}>
-                                    <X className="h-3 w-3" />
-                                </Button>
-                            </div>
-                            <div className="space-y-1 max-h-60 overflow-y-auto custom-scrollbar">
-                                {history.length === 0 ? (
-                                    <div className="text-center p-4 text-sm text-muted-foreground">No history yet</div>
-                                ) : (
-                                    history.map((histAddr) => (
-                                        <div key={histAddr} className="flex group items-center gap-2 p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer">
-                                            <div 
-                                                className="flex-1 truncate text-sm font-mono"
-                                                onClick={() => {
-                                                    setAddress(histAddr);
-                                                    const parts = histAddr.split('@');
-                                                    if(parts[1]) setDomain(parts[1]);
-                                                    localStorage.setItem('dispo_address', histAddr);
-                                                    setShowHistory(false);
-                                                }}
-                                            >
-                                                {histAddr}
-                                            </div>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-6 w-6 opacity-0 group-hover:opacity-100"
-                                                onClick={() => {
-                                                    const newHist = history.filter(h => h !== histAddr);
-                                                    setHistory(newHist);
-                                                    localStorage.setItem('dispo_history', JSON.stringify(newHist));
-                                                }}
-                                            >
-                                                <Trash2 className="h-3 w-3 text-red-400" />
-                                            </Button>
+                        <>
+                            <div className="fixed inset-0 z-40" onClick={() => setShowHistory(false)} />
+                            <motion.div
+                                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                className="absolute right-0 top-14 w-80 rounded-xl p-0 z-50 border border-white/10 shadow-2xl overflow-hidden bg-zinc-900"
+                            >
+                                <div className="flex justify-between items-center px-4 py-3 border-b border-white/10 bg-zinc-800/50">
+                                    <span className="text-xs font-bold tracking-wider uppercase text-muted-foreground">History</span>
+                                    {history.length > 0 && (
+                                        <button 
+                                            onClick={() => {
+                                                setHistory([]);
+                                                localStorage.removeItem('dispo_history');
+                                            }}
+                                            className="text-[10px] uppercase font-bold text-red-400 hover:text-red-300 transition-colors"
+                                        >
+                                            Clear All
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="max-h-72 overflow-y-auto custom-scrollbar p-2 space-y-1">
+                                    {history.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground space-y-2">
+                                            <History className="h-8 w-8 opacity-20" />
+                                            <p className="text-sm">No recent addresses</p>
                                         </div>
-                                    ))
-                                )}
-                            </div>
-                        </motion.div>
+                                    ) : (
+                                        history.map((histAddr) => (
+                                            <div key={histAddr} className="flex group items-center gap-3 p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer border border-transparent hover:border-white/5">
+                                                <div 
+                                                    className="flex-1 min-w-0"
+                                                    onClick={() => {
+                                                        setAddress(histAddr);
+                                                        const parts = histAddr.split('@');
+                                                        if(parts[1]) setDomain(parts[1]);
+                                                        localStorage.setItem('dispo_address', histAddr);
+                                                        setShowHistory(false);
+                                                    }}
+                                                >
+                                                    <p className="font-mono text-sm truncate text-gray-200">{histAddr}</p>
+                                                    <p className="textxs text-muted-foreground truncate opacity-50 text-[10px]">
+                                                        {emails.length > 0 && address === histAddr ? 'Active' : 'Click to restore'}
+                                                    </p>
+                                                </div>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/20 hover:text-red-400"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const newHist = history.filter(h => h !== histAddr);
+                                                        setHistory(newHist);
+                                                        localStorage.setItem('dispo_history', JSON.stringify(newHist));
+                                                    }}
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </motion.div>
+                        </>
                     )}
                 </AnimatePresence>
             </div>
-            <Button onClick={copyAddress} variant="secondary" size="lg" className="h-12">
+            <Button onClick={copyAddress} variant="secondary" size="lg" className="h-12 w-full md:w-auto">
               <Copy className="mr-2 h-4 w-4" /> Copy
             </Button>
-            <Button onClick={generateAddress} variant="outline" size="lg" className="h-12 border-white/10 hover:bg-white/5">
+            <Button onClick={generateAddress} variant="outline" size="lg" className="h-12 border-white/10 hover:bg-white/5 w-full md:w-auto">
               <RefreshCw className="mr-2 h-4 w-4" /> New
             </Button>
           </div>
         </div>
 
-        <AddDomainDialog 
-            open={isAddDomainOpen} 
-            onOpenChange={setIsAddDomainOpen} 
-            onAdd={(custom) => {
-                const newSaved = [...savedDomains, custom];
-                setSavedDomains(newSaved);
-                localStorage.setItem('dispo_domains', JSON.stringify(newSaved));
-                setDomain(custom);
-                
-                const currentUser = address.split('@')[0];
-                const newAddr = `${currentUser}@${custom}`;
-                setAddress(newAddr);
-                localStorage.setItem('dispo_address', newAddr);
-                addToHistory(newAddr);
-            }} 
+        <SettingsDialog
+            open={isAddDomainOpen}
+            onOpenChange={setIsAddDomainOpen}
+            savedDomains={savedDomains}
+            currentAddress={address}
+            onRetentionChange={setRetention}
+            onUpdateDomains={(newDomains) => {
+                const combined = [...new Set([...['vaultmail.dpdns.org', 'vaultmail.qzz.io'], ...newDomains])];
+                setSavedDomains(combined);
+                localStorage.setItem('dispo_domains', JSON.stringify(combined));
+            }}
         />
       </div>
 
