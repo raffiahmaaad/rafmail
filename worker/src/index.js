@@ -1,35 +1,37 @@
-import PostalMime from 'postal-mime';
+import PostalMime from "postal-mime";
 
 export default {
   async email(message, env, ctx) {
     try {
-        const parser = new PostalMime();
-        const rawEmail = await new Response(message.raw).arrayBuffer();
-        const email = await parser.parse(rawEmail);
-        
-        // Replace with your actual Vercel app URL
-        // If testing locally, you'd need a tunnel (ngrok). For prod, use your vercel.app domain.
-        const TARGET_URL = 'https://your-project.vercel.app/api/webhook'; 
+      const parser = new PostalMime();
+      const rawEmail = await new Response(message.raw).arrayBuffer();
+      const email = await parser.parse(rawEmail);
 
-        const response = await fetch(TARGET_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            from: message.from,
-            to: message.to,
-            subject: message.headers.get('subject'),
-            text: email.text,
-            html: email.html
-          })
-        });
+      // Replace with your actual Vercel app URL
+      // If testing locally, you'd need a tunnel (ngrok). For prod, use your vercel.app domain.
+      const TARGET_URL = "https://rafmail.vercel.app/api/webhook";
 
-        if (!response.ok) {
-            console.error(`Failed to forward email: ${response.status} ${response.statusText}`);
-            message.setReject("Failed to forward email");
-        }
+      const response = await fetch(TARGET_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: message.from,
+          to: message.to,
+          subject: message.headers.get("subject"),
+          text: email.text,
+          html: email.html,
+        }),
+      });
+
+      if (!response.ok) {
+        console.error(
+          `Failed to forward email: ${response.status} ${response.statusText}`
+        );
+        message.setReject("Failed to forward email");
+      }
     } catch (e) {
-        console.error("Worker Error:", e);
-        message.setReject("Internal Worker Error");
+      console.error("Worker Error:", e);
+      message.setReject("Internal Worker Error");
     }
-  }
+  },
 };
