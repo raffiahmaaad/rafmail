@@ -162,7 +162,7 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
     }
 
     const num = Math.floor(Math.random() * 9000) + 1000; // 4 digit number
-    const newAddress = `${name}-${num}@${domain}`;
+    const newAddress = `${name}${num}@${domain}`;
 
     setAddress(newAddress);
     localStorage.setItem("dispo_address", newAddress);
