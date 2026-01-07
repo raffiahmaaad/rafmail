@@ -74,7 +74,10 @@ export async function POST(req: Request) {
     
     // Set expiry based on retention setting
     // Note: expire only works on the key, so it refreshes the whole list TTL.
-    await redis.expire(key, retention);
+    // If retention is -1 (Forever), don't set expiry
+    if (retention !== -1) {
+      await redis.expire(key, retention);
+    }
 
     return NextResponse.json({ success: true, id: emailId });
   } catch (error) {

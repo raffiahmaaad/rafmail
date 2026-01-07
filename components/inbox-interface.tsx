@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -47,11 +48,9 @@ const formatSenderName = (from: string): string => {
 
   // Handle bounce addresses like "bounce+xxx@domain.com"
   if (from.includes("bounce")) {
-    // Extract the domain part after @ for display
     const atIndex = from.lastIndexOf("@");
     if (atIndex !== -1) {
       const domain = from.substring(atIndex + 1);
-      // Get the main domain name (e.g., "terabox" from "terabox.com")
       const domainName = domain.split(".")[0];
       return domainName.charAt(0).toUpperCase() + domainName.slice(1);
     }
@@ -67,11 +66,35 @@ const formatSenderName = (from: string): string => {
     }
   }
 
-  // Default: return email, truncated if too long
-  if (from.length > 25) {
-    const atIndex = from.indexOf("@");
+  // Default: return email username or truncated
+  const atIndex = from.indexOf("@");
+  if (atIndex !== -1 && atIndex > 15) {
+    return from.substring(0, 15) + "...";
+  }
+
+  if (atIndex !== -1) {
+    return from.substring(0, atIndex);
+  }
+
+  return from;
+};
+
+// Helper to format sender email for display (clean up bounce addresses)
+const formatSenderEmail = (from: string): string => {
+  if (!from) return "";
+
+  // Handle "Name <email@domain.com>" format - extract email
+  const emailMatch = from.match(/<(.+)>/);
+  if (emailMatch) {
+    return emailMatch[1];
+  }
+
+  // Handle bounce addresses - extract clean email
+  if (from.includes("bounce")) {
+    const atIndex = from.lastIndexOf("@");
     if (atIndex !== -1) {
-      return from.substring(0, Math.min(atIndex, 15)) + "...";
+      const domain = from.substring(atIndex + 1);
+      return `noreply@${domain}`;
     }
   }
 
@@ -94,6 +117,9 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
   const [showHistory, setShowHistory] = useState(false);
   const [isAddDomainOpen, setIsAddDomainOpen] = useState(false);
   const [retention, setRetention] = useState<number>(86400);
+  const [recoveryToken, setRecoveryToken] = useState<string>("");
+  const [showRecoveryToken, setShowRecoveryToken] = useState(false);
+  const { data: session } = useSession();
 
   // Load saved data
   useEffect(() => {
@@ -148,7 +174,7 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
     });
   };
 
-  const generateAddress = () => {
+  const generateAddress = async () => {
     // Generate pronounceable random string (e.g. weidipoffeutre)
     const vowels = "aeiou";
     const consonants = "bcdfghjklmnpqrstvwxyz";
@@ -168,8 +194,37 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
     localStorage.setItem("dispo_address", newAddress);
     setEmails([]);
     setSelectedEmail(null);
-    toast.success("New alias created");
     addToHistory(newAddress);
+
+    // Generate recovery token
+    try {
+      const res = await fetch("/api/recovery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: newAddress }),
+      });
+      const data = await res.json();
+      if (data.token) {
+        setRecoveryToken(data.token);
+        setShowRecoveryToken(true);
+
+        // If logged in, save to user's account
+        if (session) {
+          await fetch("/api/user/emails", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: newAddress,
+              recoveryToken: data.token,
+            }),
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to generate recovery token:", error);
+    }
+
+    toast.success("New alias created with recovery key!");
   };
 
   const copyAddress = () => {
@@ -448,7 +503,7 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[600px]">
         {/* Email List */}
         <div className="md:col-span-1 glass-card rounded-2xl overflow-hidden flex flex-col">
-          <div className="p-4 border-b border-white/5 flex justify-between items-center bg-black/20">
+          <div className="p-4 border-b border-white/5 flex justify-between items-center">
             <h3 className="font-semibold flex items-center gap-2">
               <Mail className="h-4 w-4 text-blue-400" /> Inbox
               <span className="text-xs bg-white/10 px-2 py-0.5 rounded-full text-muted-foreground">
@@ -488,7 +543,7 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
                       "p-4 rounded-xl cursor-pointer transition-all border border-transparent hover:bg-white/5",
                       selectedEmail?.id === email.id
                         ? "bg-white/10 border-blue-500/30"
-                        : "bg-black/20"
+                        : ""
                     )}
                   >
                     <div className="flex justify-between items-start mb-1">
@@ -504,9 +559,6 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
                     <h4 className="text-sm font-semibold truncate text-blue-100">
                       {email.subject}
                     </h4>
-                    <p className="text-xs text-muted-foreground truncate mt-1">
-                      {email.text.slice(0, 50)}...
-                    </p>
                   </motion.div>
                 ))
               )}
@@ -515,11 +567,11 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
         </div>
 
         {/* Email Content */}
-        <div className="md:col-span-2 glass-card rounded-2xl overflow-hidden flex flex-col h-full bg-black/40">
+        <div className="md:col-span-2 glass-card rounded-2xl overflow-hidden flex flex-col h-full">
           {selectedEmail ? (
             <div className="flex flex-col h-full">
               {/* Header */}
-              <div className="p-6 border-b border-white/5 space-y-4 bg-black/20">
+              <div className="p-6 border-b border-white/5 space-y-4">
                 <div className="flex justify-between items-start">
                   <h1 className="text-xl font-bold text-white">
                     {selectedEmail.subject}
@@ -529,19 +581,21 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-sm">
-                  <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-bold text-white text-xs">
+                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center font-bold text-white text-sm">
                     {formatSenderName(selectedEmail.from)
                       .charAt(0)
                       .toUpperCase()}
                   </div>
                   <div className="flex flex-col">
-                    <span className="font-medium text-white">
-                      {formatSenderName(selectedEmail.from)}
+                    <span className="text-white">
+                      <span className="font-medium">
+                        {formatSenderName(selectedEmail.from)}
+                      </span>{" "}
+                      <span className="text-muted-foreground text-xs">
+                        &lt;{formatSenderEmail(selectedEmail.from)}&gt;
+                      </span>
                     </span>
-                    <span
-                      className="text-muted-foreground text-xs truncate max-w-[300px]"
-                      title={selectedEmail.from}
-                    >
+                    <span className="text-muted-foreground text-xs">
                       to {selectedEmail.to || address}
                     </span>
                   </div>
@@ -549,13 +603,38 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
               </div>
 
               {/* Body */}
-              <div className="flex-1 overflow-y-auto p-6 bg-white">
-                <div
-                  className="prose prose-sm max-w-none text-black"
-                  dangerouslySetInnerHTML={{
-                    __html:
-                      selectedEmail.html || `<p>${selectedEmail.text}</p>`,
-                  }}
+              <div className="flex-1 overflow-hidden bg-white">
+                <iframe
+                  srcDoc={`
+                    <!DOCTYPE html>
+                    <html>
+                      <head>
+                        <meta charset="utf-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1">
+                        <style>
+                          * { box-sizing: border-box; }
+                          body {
+                            margin: 0;
+                            padding: 24px;
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                            font-size: 14px;
+                            line-height: 1.6;
+                            color: #1a1a1a;
+                            background: white;
+                          }
+                          img { max-width: 100%; height: auto; }
+                          a { color: #0066cc; }
+                          table { max-width: 100% !important; }
+                        </style>
+                      </head>
+                      <body>
+                        ${selectedEmail.html || `<p>${selectedEmail.text}</p>`}
+                      </body>
+                    </html>
+                  `}
+                  className="w-full h-full border-0"
+                  sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+                  title="Email content"
                 />
               </div>
             </div>
