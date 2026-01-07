@@ -530,13 +530,18 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
                 </div>
                 <div className="flex items-center gap-3 text-sm">
                   <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-bold text-white text-xs">
-                    {selectedEmail.from.charAt(0).toUpperCase()}
+                    {formatSenderName(selectedEmail.from)
+                      .charAt(0)
+                      .toUpperCase()}
                   </div>
                   <div className="flex flex-col">
                     <span className="font-medium text-white">
-                      {selectedEmail.from}
+                      {formatSenderName(selectedEmail.from)}
                     </span>
-                    <span className="text-muted-foreground text-xs">
+                    <span
+                      className="text-muted-foreground text-xs truncate max-w-[300px]"
+                      title={selectedEmail.from}
+                    >
                       to {selectedEmail.to || address}
                     </span>
                   </div>
