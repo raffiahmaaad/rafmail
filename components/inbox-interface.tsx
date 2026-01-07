@@ -35,6 +35,49 @@ interface Email {
 
 import { SettingsDialog, RETENTION_OPTIONS } from "./settings-dialog";
 
+// Helper to format sender name nicely
+const formatSenderName = (from: string): string => {
+  if (!from) return "Unknown";
+
+  // Handle "Name <email@domain.com>" format
+  const nameMatch = from.match(/^([^<]+)</);
+  if (nameMatch && nameMatch[1].trim()) {
+    return nameMatch[1].trim();
+  }
+
+  // Handle bounce addresses like "bounce+xxx@domain.com"
+  if (from.includes("bounce")) {
+    // Extract the domain part after @ for display
+    const atIndex = from.lastIndexOf("@");
+    if (atIndex !== -1) {
+      const domain = from.substring(atIndex + 1);
+      // Get the main domain name (e.g., "terabox" from "terabox.com")
+      const domainName = domain.split(".")[0];
+      return domainName.charAt(0).toUpperCase() + domainName.slice(1);
+    }
+  }
+
+  // Handle "noreply@domain.com" or similar
+  if (from.includes("noreply") || from.includes("no-reply")) {
+    const atIndex = from.lastIndexOf("@");
+    if (atIndex !== -1) {
+      const domain = from.substring(atIndex + 1);
+      const domainName = domain.split(".")[0];
+      return domainName.charAt(0).toUpperCase() + domainName.slice(1);
+    }
+  }
+
+  // Default: return email, truncated if too long
+  if (from.length > 25) {
+    const atIndex = from.indexOf("@");
+    if (atIndex !== -1) {
+      return from.substring(0, Math.min(atIndex, 15)) + "...";
+    }
+  }
+
+  return from;
+};
+
 interface InboxInterfaceProps {
   initialAddress?: string;
 }
@@ -450,7 +493,7 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
                   >
                     <div className="flex justify-between items-start mb-1">
                       <span className="font-medium truncate max-w-[150px] text-sm">
-                        {email.from}
+                        {formatSenderName(email.from)}
                       </span>
                       <span className="text-[10px] text-muted-foreground whitespace-nowrap">
                         {formatDistanceToNow(new Date(email.receivedAt), {
