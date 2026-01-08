@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { userAddresses } from "@/lib/schema";
+import { userAddresses, userEmailHistory, userMailboxSessions } from "@/lib/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { headers } from "next/headers";
 import { redis } from "@/lib/redis";
@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
 /**
  * DELETE: Delete email from user account
  * Security: Only deletes emails owned by the authenticated user
- * Also cleans up all related Redis keys
+ * Full cleanup: Removes from PostgreSQL (addresses, history, sessions) AND Redis
  */
 export async function DELETE(request: NextRequest) {
   try {
@@ -149,35 +149,50 @@ export async function DELETE(request: NextRequest) {
     }
 
     const normalizedEmail = email.toLowerCase();
+    const userId = session.user.id;
 
-    // Delete from PostgreSQL
-    await db
-      .delete(userAddresses)
-      .where(
+    // Delete from all PostgreSQL tables
+    await Promise.all([
+      // Delete from user_addresses
+      db.delete(userAddresses).where(
         and(
-          eq(userAddresses.userId, session.user.id),
+          eq(userAddresses.userId, userId),
           eq(userAddresses.email, normalizedEmail)
         )
-      );
+      ),
+      // Delete from user_email_history
+      db.delete(userEmailHistory).where(
+        and(
+          eq(userEmailHistory.userId, userId),
+          eq(userEmailHistory.email, normalizedEmail)
+        )
+      ),
+      // Delete from user_mailbox_sessions
+      db.delete(userMailboxSessions).where(
+        and(
+          eq(userMailboxSessions.userId, userId),
+          eq(userMailboxSessions.email, normalizedEmail)
+        )
+      ),
+    ]);
 
     // Also delete all related Redis keys
     const keysToDelete = [
       `inbox:${normalizedEmail}`,           // Email inbox
-      `settings:${normalizedEmail}`,        // Email settings
+      `settings:${normalizedEmail}`,        // Email settings  
       `email:${normalizedEmail}:token`,     // Recovery token
     ];
 
-    // Delete each key (some might not exist, that's ok)
+    // Delete each Redis key (some might not exist, that's ok)
     await Promise.all(
       keysToDelete.map((key) => redis.del(key).catch(() => {}))
     );
 
-    // Also find and delete any mailbox sessions in Redis
-    // These are stored as mailbox-session:{token} -> email
-    // We can't easily find them without scanning, so we'll skip this for now
-    // The sessions will expire naturally
-
-    return NextResponse.json({ success: true, deletedKeys: keysToDelete });
+    return NextResponse.json({ 
+      success: true, 
+      deletedFromPostgres: ['userAddresses', 'userEmailHistory', 'userMailboxSessions'],
+      deletedRedisKeys: keysToDelete 
+    });
   } catch (error) {
     console.error("Delete email error:", error);
     return NextResponse.json(
