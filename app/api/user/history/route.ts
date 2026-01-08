@@ -2,13 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { userEmailHistory } from "@/lib/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { headers } from "next/headers";
+import { redis } from "@/lib/redis";
 
 const MAX_HISTORY_ITEMS = 20;
 
 /**
  * GET: Get user's email history (most recent first)
+ * Auto-cleanup: Removes emails that no longer exist in Redis
  */
 export async function GET() {
   try {
@@ -22,6 +24,7 @@ export async function GET() {
 
     const history = await db
       .select({
+        id: userEmailHistory.id,
         email: userEmailHistory.email,
         createdAt: userEmailHistory.createdAt,
       })
@@ -30,8 +33,38 @@ export async function GET() {
       .orderBy(desc(userEmailHistory.createdAt))
       .limit(MAX_HISTORY_ITEMS);
 
+    // Check which emails still have inbox data in Redis
+    const validHistory: typeof history = [];
+    const orphanedIds: string[] = [];
+
+    for (const h of history) {
+      const inboxKey = `inbox:${h.email.toLowerCase()}`;
+      const exists = await redis.exists(inboxKey);
+      
+      if (exists) {
+        validHistory.push(h);
+      } else {
+        orphanedIds.push(h.id);
+      }
+    }
+
+    // Cleanup orphaned history from PostgreSQL (async, don't wait)
+    if (orphanedIds.length > 0) {
+      Promise.all(
+        orphanedIds.map((id) =>
+          db.delete(userEmailHistory).where(
+            and(
+              eq(userEmailHistory.id, id),
+              eq(userEmailHistory.userId, session.user.id)
+            )
+          )
+        )
+      ).catch((err) => console.error("History orphan cleanup error:", err));
+    }
+
     return NextResponse.json({
-      history: history.map((h) => h.email),
+      history: validHistory.map((h) => h.email),
+      cleaned: orphanedIds.length,
     });
   } catch (error) {
     console.error("Get history error:", error);
