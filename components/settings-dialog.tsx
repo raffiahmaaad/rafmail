@@ -103,7 +103,7 @@ export function SettingsDialog({
     <AnimatePresence>
       {open && (
         <>
-          {/* Dialog Container - Fixed Flex Centering */}
+          {/* Dialog Container */}
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div
               className="fixed inset-0 bg-black/60 backdrop-blur-sm"
@@ -114,7 +114,7 @@ export function SettingsDialog({
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="relative w-full max-w-lg z-10"
+              className="relative w-full max-w-lg z-10 mt-60"
             >
               <div className="rounded-2xl shadow-2xl border border-white/10 bg-zinc-900 flex flex-col max-h-[85vh] overflow-hidden">
                 <div className="flex items-center justify-between px-6 py-5 border-b border-white/5 bg-zinc-900/50">

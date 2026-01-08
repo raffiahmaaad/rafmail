@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useSession } from "@/lib/auth-client";
-import { InboxInterface } from "@/components/inbox-interface";
+import { EmailGenerator } from "@/components/email-generator";
 import { RecoveryModal } from "@/components/recovery-modal";
 import { Shield, Zap, Globe, Key, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,8 @@ import Link from "next/link";
 export default function Home() {
   const { data: session } = useSession();
   const [recoveryOpen, setRecoveryOpen] = useState(false);
+
+  // No auto-redirect - user must explicitly create alias to go to mailbox
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-background to-background/50 relative overflow-hidden flex flex-col">
@@ -36,7 +38,7 @@ export default function Home() {
               className="text-muted-foreground hover:text-white"
             >
               <Key className="h-4 w-4 mr-2" />
-              Recover Email
+              <span className="hidden sm:inline">Recover Email</span>
             </Button>
 
             <Link href={session ? "/dashboard" : "/auth/signin"}>
@@ -53,40 +55,41 @@ export default function Home() {
       </header>
 
       {/* Content */}
-      <div className="flex-1 py-12">
-        <div className="text-center max-w-2xl mx-auto px-4 mb-12 space-y-4">
-          <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-white to-white/50">
-            Disposable Email <br /> for Developers
+      <div className="flex-1 py-8 md:py-12 flex flex-col items-center justify-center">
+        <div className="text-center max-w-2xl mx-auto px-4 mb-8 space-y-4">
+          <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-white to-white/50">
+            Disposable Email <br />
+            for Developers
           </h1>
-          <p className="text-muted-foreground text-lg">
-            Secure, serverless temporary email service deployed on Vercel. Bring
-            your own domain or use the default.
+          <p className="text-muted-foreground text-base md:text-lg">
+            Secure, serverless temporary email. Bring your own domain or use the
+            default.
           </p>
         </div>
 
-        <InboxInterface />
+        <EmailGenerator />
 
         {/* Features Grid */}
-        <div className="max-w-6xl mx-auto px-4 mt-24 grid md:grid-cols-3 gap-8">
+        <div className="max-w-4xl mx-auto px-4 mt-16 grid sm:grid-cols-3 gap-6">
           <Feature
-            icon={<Zap className="h-6 w-6 text-yellow-400" />}
+            icon={<Zap className="h-5 w-5 text-yellow-400" />}
             title="Instant & Real-time"
-            desc="Emails arrive instantly via Webhooks. The inbox auto-refreshes in real-time."
+            desc="Emails arrive instantly. Auto-refresh enabled."
           />
           <Feature
-            icon={<Shield className="h-6 w-6 text-green-400" />}
+            icon={<Shield className="h-5 w-5 text-green-400" />}
             title="Privacy First"
-            desc="No tracking. Emails traverse your infrastructure and are stored in Redis with 24h TTL."
+            desc="No tracking. Emails stored with configurable TTL."
           />
           <Feature
-            icon={<Globe className="h-6 w-6 text-blue-400" />}
+            icon={<Globe className="h-5 w-5 text-blue-400" />}
             title="Custom Domains"
-            desc="Point your domain's MX records to your Cloudflare/Mailgun and route emails here."
+            desc="Use your own domain or our defaults."
           />
         </div>
       </div>
 
-      <footer className="border-t border-white/5 py-8 mt-12 text-center text-muted-foreground text-sm">
+      <footer className="border-t border-white/5 py-6 text-center text-muted-foreground text-sm">
         <p>© {new Date().getFullYear()} RafMail. Open Source.</p>
       </footer>
 
@@ -106,10 +109,10 @@ function Feature({
   desc: string;
 }) {
   return (
-    <div className="p-6 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
-      <div className="mb-4 p-3 rounded-full bg-white/5 w-fit">{icon}</div>
-      <h3 className="text-lg font-bold mb-2">{title}</h3>
-      <p className="text-muted-foreground leading-relaxed">{desc}</p>
+    <div className="p-5 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
+      <div className="mb-3 p-2.5 rounded-full bg-white/5 w-fit">{icon}</div>
+      <h3 className="text-base font-bold mb-1">{title}</h3>
+      <p className="text-muted-foreground text-sm leading-relaxed">{desc}</p>
     </div>
   );
 }

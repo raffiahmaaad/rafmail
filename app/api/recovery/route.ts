@@ -19,6 +19,11 @@ export async function POST(request: NextRequest) {
     const tokenKey = `recovery:${tokenId}`;
     await redis.set(tokenKey, email);
     await redis.expire(tokenKey, 30 * 24 * 60 * 60); // 30 days
+    
+    // Also store by email for reverse lookup
+    const emailTokenKey = `email:${email}:token`;
+    await redis.set(emailTokenKey, token);
+    await redis.expire(emailTokenKey, 30 * 24 * 60 * 60); // 30 days
 
     return NextResponse.json({ 
       token,

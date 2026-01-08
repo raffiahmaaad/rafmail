@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useSession } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -18,6 +19,10 @@ import {
   ChevronDown,
   X,
   Settings2,
+  Key,
+  Eye,
+  EyeOff,
+  Plus,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatDistanceToNow } from "date-fns";
@@ -103,9 +108,13 @@ const formatSenderEmail = (from: string): string => {
 
 interface InboxInterfaceProps {
   initialAddress?: string;
+  initialUsername?: string;
 }
 
-export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
+export function InboxInterface({
+  initialAddress,
+  initialUsername,
+}: InboxInterfaceProps) {
   const [address, setAddress] = useState<string>(initialAddress || "");
   const [domain, setDomain] = useState<string>("rafxyz.web.id");
   const [emails, setEmails] = useState<Email[]>([]);
@@ -119,7 +128,13 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
   const [retention, setRetention] = useState<number>(86400);
   const [recoveryToken, setRecoveryToken] = useState<string>("");
   const [showRecoveryToken, setShowRecoveryToken] = useState(false);
+  const [viewingRecoveryKey, setViewingRecoveryKey] = useState<string | null>(
+    null
+  );
+  const [viewingRecoveryToken, setViewingRecoveryToken] = useState<string>("");
+  const [loadingRecoveryKey, setLoadingRecoveryKey] = useState(false);
   const { data: session } = useSession();
+  const router = useRouter();
 
   // Load saved data
   useEffect(() => {
@@ -130,14 +145,28 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
     if (savedDoms) {
       setSavedDomains(JSON.parse(savedDoms));
     } else {
-      // Ensure defaults are set if nothing saved
       localStorage.setItem("dispo_domains", JSON.stringify(["rafxyz.web.id"]));
     }
 
     if (savedHist) setHistory(JSON.parse(savedHist));
     if (savedRet) setRetention(parseInt(savedRet));
 
-    if (!initialAddress) {
+    // Handle initialUsername (from /mailbox/[username] route)
+    if (initialUsername && !initialAddress) {
+      const savedAddr = localStorage.getItem("dispo_address");
+      let domainToUse = "rafxyz.web.id";
+      if (savedAddr && savedAddr.includes("@")) {
+        domainToUse = savedAddr.split("@")[1];
+      }
+      const fullAddress = `${initialUsername}@${domainToUse}`;
+      setAddress(fullAddress);
+      setDomain(domainToUse);
+      localStorage.setItem("dispo_address", fullAddress);
+    } else if (initialAddress) {
+      setAddress(initialAddress);
+      const parts = initialAddress.split("@");
+      if (parts.length > 1) setDomain(parts[1]);
+    } else {
       const saved = localStorage.getItem("dispo_address");
       if (saved) {
         setAddress(saved);
@@ -146,16 +175,14 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
       } else {
         generateAddress();
       }
-    } else {
-      const parts = initialAddress.split("@");
-      if (parts.length > 1) setDomain(parts[1]);
     }
-  }, [initialAddress]);
+  }, [initialAddress, initialUsername]);
 
   // Sync Address to URL (without reloading)
   useEffect(() => {
     if (address && address.includes("@")) {
-      window.history.replaceState(null, "", `/${address}`);
+      const username = address.split("@")[0];
+      window.history.replaceState(null, "", `/mailbox/${username}`);
     }
   }, [address]);
 
@@ -208,6 +235,13 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
         setRecoveryToken(data.token);
         setShowRecoveryToken(true);
 
+        // Save token to localStorage for local lookup
+        const savedTokens = JSON.parse(
+          localStorage.getItem("dispo_tokens") || "{}"
+        );
+        savedTokens[newAddress] = data.token;
+        localStorage.setItem("dispo_tokens", JSON.stringify(savedTokens));
+
         // If logged in, save to user's account
         if (session) {
           await fetch("/api/user/emails", {
@@ -225,6 +259,49 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
     }
 
     toast.success("New alias created with recovery key!");
+  };
+
+  const fetchRecoveryKey = async (email: string) => {
+    setLoadingRecoveryKey(true);
+    setViewingRecoveryKey(email);
+
+    // Check localStorage first
+    const savedTokens = JSON.parse(
+      localStorage.getItem("dispo_tokens") || "{}"
+    );
+    if (savedTokens[email]) {
+      setViewingRecoveryToken(savedTokens[email]);
+      setLoadingRecoveryKey(false);
+      return;
+    }
+
+    // Fallback to API
+    try {
+      const res = await fetch(
+        `/api/recovery/lookup?email=${encodeURIComponent(email)}`
+      );
+      const data = await res.json();
+      if (data.token) {
+        setViewingRecoveryToken(data.token);
+        // Save to localStorage for future use
+        savedTokens[email] = data.token;
+        localStorage.setItem("dispo_tokens", JSON.stringify(savedTokens));
+      } else {
+        toast.error("Recovery key not found for this email");
+        setViewingRecoveryKey(null);
+      }
+    } catch (error) {
+      console.error("Failed to fetch recovery key:", error);
+      toast.error("Failed to fetch recovery key");
+      setViewingRecoveryKey(null);
+    } finally {
+      setLoadingRecoveryKey(false);
+    }
+  };
+
+  const copyRecoveryToken = () => {
+    navigator.clipboard.writeText(viewingRecoveryToken);
+    toast.success("Recovery key copied!");
   };
 
   const copyAddress = () => {
@@ -265,9 +342,9 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
   }, [autoRefresh, fetchEmails]);
 
   return (
-    <div className="w-full max-w-6xl mx-auto p-4 md:p-8 space-y-8">
+    <div className="w-full max-w-6xl mx-auto p-3 sm:p-4 md:p-8 space-y-4 sm:space-y-6 md:space-y-8">
       {/* Header / Controls */}
-      <div className="glass-card rounded-2xl p-6 md:p-8 space-y-6 relative z-10">
+      <div className="glass-card rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 relative z-10">
         <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
           <div className="space-y-1 text-center md:text-left">
             <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">
@@ -294,193 +371,172 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
           </div>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 flex gap-2">
-            <div className="relative flex-1">
-              <Input
-                value={address.split("@")[0]}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/[^a-zA-Z0-9._-]/g, "");
-                  const currentDomain = address.split("@")[1] || domain;
-                  setAddress(`${val}@${currentDomain}`);
-                  localStorage.setItem(
-                    "dispo_address",
-                    `${val}@${currentDomain}`
-                  );
-                }}
-                onBlur={() => addToHistory(address)}
-                className="pr-4 font-mono text-lg bg-black/20 border-white/10 h-12"
-                placeholder="username"
-              />
+        <div className="flex flex-col gap-4">
+          {/* Email Input Row with Buttons */}
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            {/* Email Address Display - Read Only */}
+            <div className="flex-1 min-w-[200px] h-12 px-4 flex items-center rounded-md border border-white/10 bg-black/20">
+              <span className="font-medium   text-sm sm:text-base text-white truncate">
+                {address}
+              </span>
             </div>
-            <div className="relative flex items-center">
-              <span className="text-muted-foreground text-lg px-2">@</span>
-            </div>
-            <div className="relative flex-1 max-w-[250px] flex gap-2">
-              {/* Domain Selection Logic */}
-              <div className="relative w-full">
-                <select
-                  value={domain}
-                  onChange={(e) => {
-                    const newDomain = e.target.value;
-                    setDomain(newDomain);
-                    const currentUser = address.split("@")[0];
-                    const newAddr = `${currentUser}@${newDomain}`;
-                    setAddress(newAddr);
-                    localStorage.setItem("dispo_address", newAddr);
-                    addToHistory(newAddr);
-                  }}
-                  className="w-full h-12 pl-3 pr-8 rounded-md border border-white/10 bg-black/20 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 appearance-none glass"
-                >
-                  {savedDomains.map((d) => (
-                    <option
-                      key={d}
-                      value={d}
-                      className="bg-slate-900 font-mono"
-                    >
-                      {d}
-                    </option>
-                  ))}
-                </select>
-                <ArrowRight className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-50 pointer-events-none rotate-90" />
-              </div>
-            </div>
-          </div>
-          <div className="flex gap-2 items-center">
-            {/* Settings Button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsAddDomainOpen(true)}
-              className="h-12 w-12 border border-white/10 hover:bg-white/5 text-purple-400 hover:text-purple-300"
-              title="Settings"
-            >
-              <Settings2 className="h-5 w-5" />
-            </Button>
 
-            <div className="relative">
+            {/* Action Buttons - inline with input */}
+            <div className="flex gap-2 items-center flex-shrink-0">
+              {/* Copy Button */}
               <Button
-                onClick={() => setShowHistory(!showHistory)}
+                onClick={copyAddress}
                 variant="ghost"
                 size="icon"
-                className={cn(
-                  "h-12 w-12 border border-white/10 hover:bg-white/5 relative",
-                  showHistory && "bg-white/10 ring-2 ring-white/10"
-                )}
-                title="History"
+                className="h-10 w-10 sm:h-12 sm:w-12 border border-white/10 hover:bg-white/5"
+                title="Copy Address"
               >
-                <History className="h-5 w-5" />
-                {history.length > 0 && (
-                  <span className="absolute top-2 right-2 h-2 w-2 bg-blue-500 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
-                )}
+                <Copy className="h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
 
-              <AnimatePresence>
-                {showHistory && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-40"
-                      onClick={() => setShowHistory(false)}
-                    />
-                    <motion.div
-                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                      className="absolute right-0 top-14 w-80 rounded-xl p-0 z-50 border border-white/10 shadow-2xl overflow-hidden bg-zinc-900"
-                    >
-                      <div className="flex justify-between items-center px-4 py-3 border-b border-white/10 bg-zinc-800/50">
-                        <span className="text-xs font-bold tracking-wider uppercase text-muted-foreground">
-                          History
-                        </span>
-                        {history.length > 0 && (
-                          <button
-                            onClick={() => {
-                              setHistory([]);
-                              localStorage.removeItem("dispo_history");
-                            }}
-                            className="text-[10px] uppercase font-bold text-red-400 hover:text-red-300 transition-colors"
-                          >
-                            Clear All
-                          </button>
-                        )}
-                      </div>
-                      <div className="max-h-72 overflow-y-auto custom-scrollbar p-2 space-y-1">
-                        {history.length === 0 ? (
-                          <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground space-y-2">
-                            <History className="h-8 w-8 opacity-20" />
-                            <p className="text-sm">No recent addresses</p>
-                          </div>
-                        ) : (
-                          history.map((histAddr) => (
-                            <div
-                              key={histAddr}
-                              className="flex group items-center gap-3 p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer border border-transparent hover:border-white/5"
+              {/* Settings Button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsAddDomainOpen(true)}
+                className="h-10 w-10 sm:h-12 sm:w-12 border border-white/10 hover:bg-white/5"
+                title="Settings"
+              >
+                <Settings2 className="h-4 w-4 sm:h-5 sm:w-5" />
+              </Button>
+
+              {/* History Button */}
+              <div className="relative">
+                <Button
+                  onClick={() => setShowHistory(!showHistory)}
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    "h-10 w-10 sm:h-12 sm:w-12 border border-white/10 hover:bg-white/5 relative",
+                    showHistory && "bg-white/10 ring-2 ring-white/10"
+                  )}
+                  title="History"
+                >
+                  <History className="h-4 w-4 sm:h-5 sm:w-5" />
+                  {history.length > 0 && (
+                    <span className="absolute top-2 right-2 h-2 w-2 bg-blue-500 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
+                  )}
+                </Button>
+
+                <AnimatePresence>
+                  {showHistory && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setShowHistory(false)}
+                      />
+                      <motion.div
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="absolute right-0 top-14 w-80 rounded-xl p-0 z-50 border border-white/10 shadow-2xl overflow-hidden bg-zinc-900"
+                      >
+                        <div className="flex justify-between items-center px-4 py-3 border-b border-white/10 bg-zinc-800/50">
+                          <span className="text-xs font-bold tracking-wider uppercase text-muted-foreground">
+                            History
+                          </span>
+                          {history.length > 0 && (
+                            <button
+                              onClick={() => {
+                                setHistory([]);
+                                localStorage.removeItem("dispo_history");
+                              }}
+                              className="text-[10px] uppercase font-bold text-red-400 hover:text-red-300 transition-colors"
                             >
-                              <div
-                                className="flex-1 min-w-0"
-                                onClick={() => {
-                                  setAddress(histAddr);
-                                  const parts = histAddr.split("@");
-                                  if (parts[1]) setDomain(parts[1]);
-                                  localStorage.setItem(
-                                    "dispo_address",
-                                    histAddr
-                                  );
-                                  setShowHistory(false);
-                                }}
-                              >
-                                <p className="font-mono text-sm truncate text-gray-200">
-                                  {histAddr}
-                                </p>
-                                <p className="textxs text-muted-foreground truncate opacity-50 text-[10px]">
-                                  {emails.length > 0 && address === histAddr
-                                    ? "Active"
-                                    : "Click to restore"}
-                                </p>
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/20 hover:text-red-400"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const newHist = history.filter(
-                                    (h) => h !== histAddr
-                                  );
-                                  setHistory(newHist);
-                                  localStorage.setItem(
-                                    "dispo_history",
-                                    JSON.stringify(newHist)
-                                  );
-                                }}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
+                              Clear All
+                            </button>
+                          )}
+                        </div>
+                        <div className="max-h-72 overflow-y-auto custom-scrollbar p-2 space-y-1">
+                          {history.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground space-y-2">
+                              <History className="h-8 w-8 opacity-20" />
+                              <p className="text-sm">No recent addresses</p>
                             </div>
-                          ))
-                        )}
-                      </div>
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
+                          ) : (
+                            history.map((histAddr) => (
+                              <div
+                                key={histAddr}
+                                className="flex group items-center gap-3 p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer border border-transparent hover:border-white/5"
+                              >
+                                <div
+                                  className="flex-1 min-w-0"
+                                  onClick={() => {
+                                    setAddress(histAddr);
+                                    const parts = histAddr.split("@");
+                                    if (parts[1]) setDomain(parts[1]);
+                                    localStorage.setItem(
+                                      "dispo_address",
+                                      histAddr
+                                    );
+                                    setShowHistory(false);
+                                  }}
+                                >
+                                  <p className="font-mono text-sm truncate text-gray-200">
+                                    {histAddr}
+                                  </p>
+                                  <p className="textxs text-muted-foreground truncate opacity-50 text-[10px]">
+                                    {emails.length > 0 && address === histAddr
+                                      ? "Active"
+                                      : "Click to restore"}
+                                  </p>
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-cyan-500/20 hover:text-cyan-400"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    fetchRecoveryKey(histAddr);
+                                  }}
+                                  title="View recovery key"
+                                >
+                                  <Key className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/20 hover:text-red-400"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const newHist = history.filter(
+                                      (h) => h !== histAddr
+                                    );
+                                    setHistory(newHist);
+                                    localStorage.setItem(
+                                      "dispo_history",
+                                      JSON.stringify(newHist)
+                                    );
+                                  }}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Create New Address Button */}
+              <Button
+                onClick={() => router.push("/")}
+                variant="ghost"
+                size="icon"
+                className="h-10 w-10 sm:h-12 sm:w-12 border border-white/10 hover:bg-white/5"
+                title="Create New Address"
+              >
+                <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
+              </Button>
             </div>
-            <Button
-              onClick={copyAddress}
-              variant="secondary"
-              size="lg"
-              className="h-12 w-full md:w-auto"
-            >
-              <Copy className="mr-2 h-4 w-4" /> Copy
-            </Button>
-            <Button
-              onClick={generateAddress}
-              variant="outline"
-              size="lg"
-              className="h-12 border-white/10 hover:bg-white/5 w-full md:w-auto"
-            >
-              <RefreshCw className="mr-2 h-4 w-4" /> New
-            </Button>
           </div>
         </div>
 
@@ -498,11 +554,87 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
             localStorage.setItem("dispo_domains", JSON.stringify(combined));
           }}
         />
+
+        {/* Recovery Key View Dialog */}
+        <AnimatePresence>
+          {viewingRecoveryKey && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center">
+              <div
+                className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+                onClick={() => {
+                  setViewingRecoveryKey(null);
+                  setViewingRecoveryToken("");
+                }}
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="relative z-50 w-full max-w-md mx-4 glass-card rounded-2xl p-6 space-y-4 border border-white/10"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Key className="h-5 w-5 text-cyan-400" />
+                    <h3 className="font-semibold text-lg">Recovery Key</h3>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => {
+                      setViewingRecoveryKey(null);
+                      setViewingRecoveryToken("");
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <p className="text-sm text-muted-foreground font-mono truncate">
+                  {viewingRecoveryKey}
+                </p>
+
+                {loadingRecoveryKey ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-cyan-400" />
+                  </div>
+                ) : viewingRecoveryToken ? (
+                  <div className="space-y-3">
+                    <div className="bg-black/30 rounded-lg p-3">
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Recovery Token
+                      </p>
+                      <code className="text-xs break-all text-cyan-300 block">
+                        {viewingRecoveryToken}
+                      </code>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-600"
+                        onClick={copyRecoveryToken}
+                      >
+                        <Copy className="h-4 w-4 mr-2" />
+                        Copy Token
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground text-center">
+                      Save this token to recover your email address later
+                    </p>
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-muted-foreground">
+                    <p>No recovery key found for this email</p>
+                  </div>
+                )}
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[600px]">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 min-h-[400px] md:h-[600px]">
         {/* Email List */}
-        <div className="md:col-span-1 glass-card rounded-2xl overflow-hidden flex flex-col">
+        <div className="md:col-span-1 glass-card rounded-2xl overflow-hidden flex flex-col h-[280px] sm:h-[350px] md:h-auto">
           <div className="p-4 border-b border-white/5 flex justify-between items-center">
             <h3 className="font-semibold flex items-center gap-2">
               <Mail className="h-4 w-4 text-blue-400" /> Inbox
@@ -556,7 +688,7 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
                         })}
                       </span>
                     </div>
-                    <h4 className="text-sm font-semibold truncate text-blue-100">
+                    <h4 className="text-sm font-semibold truncate text-white">
                       {email.subject}
                     </h4>
                   </motion.div>
@@ -567,13 +699,13 @@ export function InboxInterface({ initialAddress }: InboxInterfaceProps) {
         </div>
 
         {/* Email Content */}
-        <div className="md:col-span-2 glass-card rounded-2xl overflow-hidden flex flex-col h-full">
+        <div className="md:col-span-2 glass-card rounded-2xl overflow-hidden flex flex-col h-[350px] sm:h-[400px] md:h-full">
           {selectedEmail ? (
             <div className="flex flex-col h-full">
               {/* Header */}
-              <div className="p-6 border-b border-white/5 space-y-4">
+              <div className="p-4 sm:p-6 border-b border-white/5 space-y-3 sm:space-y-4">
                 <div className="flex justify-between items-start">
-                  <h1 className="text-xl font-bold text-white">
+                  <h1 className="text-base sm:text-lg md:text-xl font-bold text-white">
                     {selectedEmail.subject}
                   </h1>
                   <span className="text-xs text-muted-foreground border border-white/10 px-2 py-1 rounded-md">
