@@ -1,5 +1,10 @@
 import { redis } from '@/lib/redis';
 import { NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
+import { headers } from 'next/headers';
+import { db } from '@/lib/db';
+import { userAddresses } from '@/lib/schema';
+import { eq } from 'drizzle-orm';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +17,37 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Address required' }, { status: 400 });
   }
 
+  const normalizedAddress = address.toLowerCase();
+
+  // Check if user is logged in and owns this email
+  try {
+    const authSession = await auth.api.getSession({
+      headers: await headers(),
+    });
+
+    if (authSession?.user?.id) {
+      // Check if this email belongs to the logged-in user
+      const userEmails = await db
+        .select()
+        .from(userAddresses)
+        .where(eq(userAddresses.userId, authSession.user.id));
+
+      const ownsEmail = userEmails.some(
+        (e) => e.email.toLowerCase() === normalizedAddress
+      );
+
+      if (ownsEmail) {
+        // User owns this email - grant access!
+        const key = `inbox:${normalizedAddress}`;
+        const emails = await redis.lrange(key, 0, -1);
+        return NextResponse.json({ emails: emails || [] });
+      }
+    }
+  } catch (authError) {
+    // Auth check failed, continue with session-based check
+    console.error('Auth check error:', authError);
+  }
+
   // Security: Verify session if provided
   if (session) {
     try {
@@ -19,12 +55,11 @@ export async function GET(req: Request) {
       const storedEmail = await redis.get(sessionKey);
 
       if (storedEmail) {
-        const normalizedAddress = address.toLowerCase();
         const normalizedStoredEmail = (storedEmail as string).toLowerCase();
 
         // Session is valid and matches email - allow access
         if (normalizedAddress === normalizedStoredEmail) {
-          const key = `inbox:${address.toLowerCase()}`;
+          const key = `inbox:${normalizedAddress}`;
           const emails = await redis.lrange(key, 0, -1);
           return NextResponse.json({ emails: emails || [] });
         }
@@ -46,7 +81,7 @@ export async function GET(req: Request) {
 
   // No session provided - check if this email has a recovery token (is protected)
   try {
-    const emailTokenKey = `email:${address.toLowerCase()}:token`;
+    const emailTokenKey = `email:${normalizedAddress}:token`;
     const hasRecoveryToken = await redis.exists(emailTokenKey);
 
     if (hasRecoveryToken) {
@@ -59,7 +94,7 @@ export async function GET(req: Request) {
 
     // Email not protected (no recovery token), allow access
     // This is for backwards compatibility with emails created before security update
-    const key = `inbox:${address.toLowerCase()}`;
+    const key = `inbox:${normalizedAddress}`;
     const emails = await redis.lrange(key, 0, -1);
     return NextResponse.json({ emails: emails || [] });
   } catch (error) {
@@ -67,3 +102,4 @@ export async function GET(req: Request) {
     return NextResponse.json({ emails: [] }, { status: 200 });
   }
 }
+
