@@ -682,13 +682,13 @@ export function InboxInterface({
                       <span className="font-medium truncate max-w-[150px] text-sm">
                         {formatSenderName(email.from)}
                       </span>
-                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                      <span className="text-[10px] text-white-foreground whitespace-nowrap">
                         {formatDistanceToNow(new Date(email.receivedAt), {
                           addSuffix: true,
                         })}
                       </span>
                     </div>
-                    <h4 className="text-sm font-semibold truncate text-white">
+                    <h4 className="text-sm font-semibold truncate text-muted-foreground">
                       {email.subject}
                     </h4>
                   </motion.div>
