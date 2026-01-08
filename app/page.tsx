@@ -56,7 +56,7 @@ export default function Home() {
         <div className="text-center max-w-2xl mx-auto px-4 mb-8 space-y-4">
           <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-white to-white/50">
             Disposable Email <br />
-            for Developers
+            for Everyone.
           </h1>
           <p className="text-muted-foreground text-base md:text-lg">
             Secure, serverless temporary email. Bring your own domain or use the

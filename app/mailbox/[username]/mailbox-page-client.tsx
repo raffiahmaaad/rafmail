@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { InboxInterface } from "@/components/inbox-interface";
 import { MailboxVerifyModal } from "@/components/mailbox-verify-modal";
 import { Shield, User } from "lucide-react";
 import Link from "next/link";
+import { useSession } from "@/lib/auth-client";
 
 interface MailboxPageClientProps {
   username: string;
@@ -13,66 +14,94 @@ interface MailboxPageClientProps {
 
 export function MailboxPageClient({ username }: MailboxPageClientProps) {
   const router = useRouter();
+  const { data: session, isPending } = useSession();
   const [isVerified, setIsVerified] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [fullEmail, setFullEmail] = useState<string>("");
+  const hasChecked = useRef(false);
 
-  // Determine the full email address
+  // Resolve email AND check access in one operation
   useEffect(() => {
-    const savedAddr = localStorage.getItem("dispo_address");
-    let domainToUse = "rafxyz.web.id";
-    if (savedAddr && savedAddr.includes("@")) {
-      domainToUse = savedAddr.split("@")[1];
-    }
-    const email = `${username}@${domainToUse}`;
-    setFullEmail(email);
-  }, [username]);
+    // Wait for session loading to complete
+    if (isPending) return;
 
-  // Check for existing valid session
-  useEffect(() => {
-    if (!fullEmail) return;
+    // Prevent duplicate runs
+    if (hasChecked.current) return;
+    hasChecked.current = true;
 
-    const checkSession = async () => {
+    const resolveAndCheckAccess = async () => {
       setIsChecking(true);
 
-      try {
-        // Check localStorage first
-        const sessions = JSON.parse(
-          localStorage.getItem("mailbox_sessions") || "{}"
-        );
-        const emailSession = sessions[fullEmail.toLowerCase()];
+      // LOGGED IN: Find the email in user's saved emails with matching username
+      if (session?.user?.id) {
+        try {
+          const res = await fetch("/api/user/emails");
+          const data = await res.json();
+          const emails = data.emails || [];
 
-        if (emailSession && emailSession.token && emailSession.expiresAt) {
-          // Check if not expired locally
-          if (Date.now() < emailSession.expiresAt) {
-            // Verify with server
-            const res = await fetch(
-              `/api/verify-access?email=${encodeURIComponent(fullEmail)}&session=${encodeURIComponent(emailSession.token)}`
+          // Find any email that starts with this username
+          const matchingEmail = emails.find((e: { email: string }) =>
+            e.email.toLowerCase().startsWith(username.toLowerCase() + "@")
+          );
+
+          if (matchingEmail) {
+            // Found email in user's account - grant access immediately!
+            setFullEmail(matchingEmail.email);
+            setIsVerified(true);
+            setIsChecking(false);
+            return;
+          }
+        } catch (e) {
+          console.error("Failed to fetch user emails:", e);
+        }
+      }
+
+      // GUEST or email not found in user's account: Use localStorage
+      const savedAddr = localStorage.getItem("dispo_address");
+      let domainToUse = "rafxyz.web.id";
+      if (savedAddr && savedAddr.includes("@")) {
+        domainToUse = savedAddr.split("@")[1];
+      }
+      const resolvedEmail = `${username}@${domainToUse}`;
+      setFullEmail(resolvedEmail);
+
+      // For guests: Check localStorage for session
+      const sessions = JSON.parse(
+        localStorage.getItem("mailbox_sessions") || "{}"
+      );
+      const emailSession = sessions[resolvedEmail.toLowerCase()];
+
+      if (emailSession && emailSession.token && emailSession.expiresAt) {
+        if (Date.now() < emailSession.expiresAt) {
+          // Verify with server
+          try {
+            const verifyRes = await fetch(
+              `/api/verify-access?email=${encodeURIComponent(resolvedEmail)}&session=${encodeURIComponent(emailSession.token)}`
             );
-            const data = await res.json();
+            const verifyData = await verifyRes.json();
 
-            if (data.verified) {
+            if (verifyData.verified) {
               setSessionToken(emailSession.token);
               setIsVerified(true);
               setIsChecking(false);
               return;
             }
+          } catch (e) {
+            console.error("Session verification failed:", e);
           }
-
-          // Session invalid or expired, remove it
-          delete sessions[fullEmail.toLowerCase()];
-          localStorage.setItem("mailbox_sessions", JSON.stringify(sessions));
         }
-      } catch (error) {
-        console.error("Session check failed:", error);
+
+        // Session invalid or expired, remove it
+        delete sessions[resolvedEmail.toLowerCase()];
+        localStorage.setItem("mailbox_sessions", JSON.stringify(sessions));
       }
 
       setIsChecking(false);
     };
 
-    checkSession();
-  }, [fullEmail]);
+    resolveAndCheckAccess();
+  }, [username, isPending, session?.user?.id]);
 
   const handleVerified = (token: string) => {
     setSessionToken(token);

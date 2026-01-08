@@ -68,20 +68,9 @@ export default function DashboardPage() {
     error?: string;
     message?: string;
   } | null>(null);
-  const [verifiedDomains, setVerifiedDomains] = useState<Set<string>>(() => {
-    // Load from localStorage on initial render
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("verified_domains");
-      if (saved) {
-        try {
-          return new Set(JSON.parse(saved));
-        } catch {
-          return new Set();
-        }
-      }
-    }
-    return new Set();
-  });
+  const [verifiedDomains, setVerifiedDomains] = useState<Set<string>>(
+    new Set()
+  );
   const [domainsLoading, setDomainsLoading] = useState(true);
   const [addingDomain, setAddingDomain] = useState(false);
 
@@ -92,6 +81,13 @@ export default function DashboardPage() {
       const data = await res.json();
       if (data.domains) {
         setSavedDomains(data.domains);
+      }
+      // Load verified domains from API response
+      if (data.customDomains) {
+        const verified = data.customDomains
+          .filter((d: { domain: string; verified: boolean }) => d.verified)
+          .map((d: { domain: string }) => d.domain);
+        setVerifiedDomains(new Set(verified));
       }
     } catch (error) {
       console.error("Error fetching domains:", error);
@@ -254,10 +250,18 @@ export default function DashboardPage() {
       if (data.verified) {
         setVerifiedDomains((prev) => {
           const newSet = new Set(prev).add(cleanDomain);
-          // Save to localStorage
-          localStorage.setItem("verified_domains", JSON.stringify([...newSet]));
           return newSet;
         });
+        // Update domain verified status in database
+        try {
+          await fetch("/api/user/domains", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ domain: cleanDomain, verified: true }),
+          });
+        } catch (e) {
+          console.error("Failed to save verified status:", e);
+        }
         toast.success("Domain verified successfully!");
       } else {
         toast.error(data.error || "Domain verification failed");

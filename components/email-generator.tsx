@@ -162,24 +162,52 @@ export function EmailGenerator({ onAliasCreated }: EmailGeneratorProps) {
         throw new Error("Failed to generate recovery token");
       }
 
-      // Save to localStorage
-      localStorage.setItem("dispo_address", email);
-      localStorage.setItem("dispo_default_retention", duration.toString());
+      // Save data - database for logged-in users, localStorage for guests
+      if (!session) {
+        localStorage.setItem("dispo_address", email);
+        localStorage.setItem("dispo_default_retention", duration.toString());
 
-      const savedTokens = JSON.parse(
-        localStorage.getItem("dispo_tokens") || "{}"
-      );
-      savedTokens[email] = data.token;
-      localStorage.setItem("dispo_tokens", JSON.stringify(savedTokens));
-
-      // Add to history
-      const history = JSON.parse(localStorage.getItem("dispo_history") || "[]");
-      if (!history.includes(email)) {
-        history.unshift(email);
-        localStorage.setItem(
-          "dispo_history",
-          JSON.stringify(history.slice(0, 10))
+        const savedTokens = JSON.parse(
+          localStorage.getItem("dispo_tokens") || "{}"
         );
+        savedTokens[email] = data.token;
+        localStorage.setItem("dispo_tokens", JSON.stringify(savedTokens));
+
+        // Add to history
+        const history = JSON.parse(
+          localStorage.getItem("dispo_history") || "[]"
+        );
+        if (!history.includes(email)) {
+          history.unshift(email);
+          localStorage.setItem(
+            "dispo_history",
+            JSON.stringify(history.slice(0, 10))
+          );
+        }
+      } else {
+        // Save to database for logged-in users
+        await fetch("/api/user/emails", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email,
+            recoveryToken: data.token,
+            retentionSeconds: duration,
+          }),
+        });
+        await fetch("/api/user/history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        await fetch("/api/user/preferences", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            defaultRetention: duration,
+            currentAddress: email,
+          }),
+        });
       }
 
       // Save retention setting
@@ -205,30 +233,26 @@ export function EmailGenerator({ onAliasCreated }: EmailGeneratorProps) {
         });
         const verifyData = await verifyRes.json();
         if (verifyData.sessionToken) {
-          // Store session in localStorage
-          const sessions = JSON.parse(
-            localStorage.getItem("mailbox_sessions") || "{}"
-          );
-          sessions[email.toLowerCase()] = {
-            token: verifyData.sessionToken,
-            expiresAt: Date.now() + verifyData.expiresIn * 1000,
-          };
-          localStorage.setItem("mailbox_sessions", JSON.stringify(sessions));
+          // Store session - database for logged-in, localStorage for guests
+          if (session) {
+            await fetch("/api/user/sessions", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email }),
+            });
+          } else {
+            const sessions = JSON.parse(
+              localStorage.getItem("mailbox_sessions") || "{}"
+            );
+            sessions[email.toLowerCase()] = {
+              token: verifyData.sessionToken,
+              expiresAt: Date.now() + verifyData.expiresIn * 1000,
+            };
+            localStorage.setItem("mailbox_sessions", JSON.stringify(sessions));
+          }
         }
       } catch (verifyError) {
         console.error("Failed to auto-create session:", verifyError);
-      }
-
-      // If logged in, save to user's account
-      if (session) {
-        await fetch("/api/user/emails", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email,
-            recoveryToken: data.token,
-          }),
-        });
       }
 
       toast.success("Email alias created!");

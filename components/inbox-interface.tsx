@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -139,70 +139,187 @@ export function InboxInterface({
   const [loadingRecoveryKey, setLoadingRecoveryKey] = useState(false);
   const { data: session } = useSession();
   const router = useRouter();
+  const hasLoadedData = useRef(false);
 
-  // Load saved data
+  // Load saved data - from database for logged-in users, localStorage for guests
   useEffect(() => {
-    const savedDoms = localStorage.getItem("dispo_domains");
-    const savedHist = localStorage.getItem("dispo_history");
-    const savedRet = localStorage.getItem("dispo_default_retention");
+    // Prevent duplicate runs
+    if (hasLoadedData.current) return;
+    hasLoadedData.current = true;
 
-    if (savedDoms) {
-      setSavedDomains(JSON.parse(savedDoms));
-    } else {
-      localStorage.setItem("dispo_domains", JSON.stringify(["rafxyz.web.id"]));
-    }
+    const loadData = async () => {
+      if (session) {
+        // LOGGED IN: Load from database API
+        try {
+          // Load history from database
+          const histRes = await fetch("/api/user/history");
+          const histData = await histRes.json();
+          if (histData.history) {
+            setHistory(histData.history);
+          }
 
-    if (savedHist) setHistory(JSON.parse(savedHist));
-    if (savedRet) setRetention(parseInt(savedRet));
+          // Load preferences from database
+          const prefRes = await fetch("/api/user/preferences");
+          const prefData = await prefRes.json();
+          if (prefData.preferences?.defaultRetention !== undefined) {
+            setRetention(prefData.preferences.defaultRetention);
+          }
 
-    // Handle initialUsername (from /mailbox/[username] route)
-    if (initialUsername && !initialAddress) {
-      const savedAddr = localStorage.getItem("dispo_address");
-      let domainToUse = "rafxyz.web.id";
-      if (savedAddr && savedAddr.includes("@")) {
-        domainToUse = savedAddr.split("@")[1];
+          // Load domains from database
+          const domRes = await fetch("/api/user/domains");
+          const domData = await domRes.json();
+          if (domData.domains) {
+            setSavedDomains(domData.domains);
+          }
+
+          // Migrate localStorage data to database (one-time)
+          const migrated = localStorage.getItem("db_migrated");
+          if (!migrated) {
+            const tokens = JSON.parse(
+              localStorage.getItem("dispo_tokens") || "{}"
+            );
+            const localHistory = JSON.parse(
+              localStorage.getItem("dispo_history") || "[]"
+            );
+            const localDomains = JSON.parse(
+              localStorage.getItem("dispo_domains") || "[]"
+            );
+            const localRetention = localStorage.getItem(
+              "dispo_default_retention"
+            );
+            const currentAddr = localStorage.getItem("dispo_address");
+
+            if (Object.keys(tokens).length > 0 || localHistory.length > 0) {
+              await fetch("/api/user/migrate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  tokens,
+                  history: localHistory,
+                  domains: localDomains.filter(
+                    (d: string) => d !== "rafxyz.web.id"
+                  ),
+                  defaultRetention: localRetention
+                    ? parseInt(localRetention)
+                    : undefined,
+                  currentAddress: currentAddr,
+                }),
+              });
+            }
+            localStorage.setItem("db_migrated", "true");
+          }
+        } catch (error) {
+          console.error("Failed to load from database:", error);
+        }
+      } else {
+        // GUEST: Load from localStorage (fallback)
+        const savedDoms = localStorage.getItem("dispo_domains");
+        const savedHist = localStorage.getItem("dispo_history");
+        const savedRet = localStorage.getItem("dispo_default_retention");
+
+        if (savedDoms) {
+          setSavedDomains(JSON.parse(savedDoms));
+        } else {
+          localStorage.setItem(
+            "dispo_domains",
+            JSON.stringify(["rafxyz.web.id"])
+          );
+        }
+        if (savedHist) setHistory(JSON.parse(savedHist));
+        if (savedRet) setRetention(parseInt(savedRet));
       }
-      const fullAddress = `${initialUsername}@${domainToUse}`;
-      setAddress(fullAddress);
-      setDomain(domainToUse);
-      localStorage.setItem("dispo_address", fullAddress);
-    } else if (initialAddress) {
-      setAddress(initialAddress);
-      const parts = initialAddress.split("@");
-      if (parts.length > 1) setDomain(parts[1]);
-    } else {
-      const saved = localStorage.getItem("dispo_address");
-      if (saved) {
-        setAddress(saved);
-        const parts = saved.split("@");
+
+      // Handle initialUsername (from /mailbox/[username] route)
+      if (initialUsername && !initialAddress) {
+        // LOGGED IN: Find email from database
+        if (session) {
+          try {
+            const emailRes = await fetch("/api/user/emails");
+            const emailData = await emailRes.json();
+            const emails = emailData.emails || [];
+
+            // Find email with matching username
+            const matchingEmail = emails.find((e: { email: string }) =>
+              e.email
+                .toLowerCase()
+                .startsWith(initialUsername.toLowerCase() + "@")
+            );
+
+            if (matchingEmail) {
+              setAddress(matchingEmail.email);
+              const parts = matchingEmail.email.split("@");
+              if (parts.length > 1) setDomain(parts[1]);
+              return;
+            }
+          } catch (e) {
+            console.error("Failed to fetch emails:", e);
+          }
+        }
+
+        // GUEST or not found: Use localStorage
+        const savedAddr = localStorage.getItem("dispo_address");
+        let domainToUse = "rafxyz.web.id";
+        if (savedAddr && savedAddr.includes("@")) {
+          domainToUse = savedAddr.split("@")[1];
+        }
+        const fullAddress = `${initialUsername}@${domainToUse}`;
+        setAddress(fullAddress);
+        setDomain(domainToUse);
+        if (!session) localStorage.setItem("dispo_address", fullAddress);
+      } else if (initialAddress) {
+        setAddress(initialAddress);
+        const parts = initialAddress.split("@");
         if (parts.length > 1) setDomain(parts[1]);
       } else {
-        generateAddress();
+        const saved = localStorage.getItem("dispo_address");
+        if (saved) {
+          setAddress(saved);
+          const parts = saved.split("@");
+          if (parts.length > 1) setDomain(parts[1]);
+        } else {
+          generateAddress();
+        }
       }
-    }
-  }, [initialAddress, initialUsername]);
+    };
 
-  // Sync Address to URL (without reloading)
-  useEffect(() => {
-    if (address && address.includes("@")) {
-      const username = address.split("@")[0];
-      window.history.replaceState(null, "", `/mailbox/${username}`);
-    }
-  }, [address]);
+    loadData();
+  }, [initialAddress, initialUsername, session?.user?.id]);
 
-  const addToHistory = (addr: string) => {
+  // URL sync disabled - was causing conflicts with Next.js router
+  // useEffect(() => {
+  //   if (address && address.includes("@")) {
+  //     const username = address.split("@")[0];
+  //     window.history.replaceState(null, "", `/mailbox/${username}`);
+  //   }
+  // }, [address]);
+
+  const addToHistory = async (addr: string) => {
     if (!addr.includes("@")) return;
 
     setHistory((prev) => {
-      // Prevent duplicates and limit to 10
       if (prev.includes(addr)) {
-        // Move to top if exists
         return [addr, ...prev.filter((a) => a !== addr)];
       }
       const newHist = [addr, ...prev].slice(0, 10);
-      localStorage.setItem("dispo_history", JSON.stringify(newHist));
+      // Save to localStorage for guests
+      if (!session) {
+        localStorage.setItem("dispo_history", JSON.stringify(newHist));
+      }
       return newHist;
     });
+
+    // Save to database for logged-in users
+    if (session) {
+      try {
+        await fetch("/api/user/history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: addr }),
+        });
+      } catch (e) {
+        console.error("Failed to save history:", e);
+      }
+    }
   };
 
   const generateAddress = async () => {
@@ -222,7 +339,7 @@ export function InboxInterface({
     const newAddress = `${name}${num}@${domain}`;
 
     setAddress(newAddress);
-    localStorage.setItem("dispo_address", newAddress);
+    if (!session) localStorage.setItem("dispo_address", newAddress);
     setEmails([]);
     setSelectedEmail(null);
     addToHistory(newAddress);
@@ -232,19 +349,21 @@ export function InboxInterface({
       const res = await fetch("/api/recovery", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: newAddress }),
+        body: JSON.stringify({ email: newAddress, isLoggedIn: !!session }),
       });
       const data = await res.json();
       if (data.token) {
         setRecoveryToken(data.token);
         setShowRecoveryToken(true);
 
-        // Save token to localStorage for local lookup
-        const savedTokens = JSON.parse(
-          localStorage.getItem("dispo_tokens") || "{}"
-        );
-        savedTokens[newAddress] = data.token;
-        localStorage.setItem("dispo_tokens", JSON.stringify(savedTokens));
+        // Save token - database for logged-in, localStorage for guests
+        if (!session) {
+          const savedTokens = JSON.parse(
+            localStorage.getItem("dispo_tokens") || "{}"
+          );
+          savedTokens[newAddress] = data.token;
+          localStorage.setItem("dispo_tokens", JSON.stringify(savedTokens));
+        }
 
         // AUTO-CREATE SESSION: Verify access immediately so creator doesn't need to enter key
         try {
@@ -258,15 +377,26 @@ export function InboxInterface({
           });
           const verifyData = await verifyRes.json();
           if (verifyData.sessionToken) {
-            // Store session in localStorage
-            const sessions = JSON.parse(
-              localStorage.getItem("mailbox_sessions") || "{}"
-            );
-            sessions[newAddress.toLowerCase()] = {
-              token: verifyData.sessionToken,
-              expiresAt: Date.now() + verifyData.expiresIn * 1000,
-            };
-            localStorage.setItem("mailbox_sessions", JSON.stringify(sessions));
+            // Store session - database for logged-in, localStorage for guests
+            if (session) {
+              await fetch("/api/user/sessions", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: newAddress }),
+              });
+            } else {
+              const sessions = JSON.parse(
+                localStorage.getItem("mailbox_sessions") || "{}"
+              );
+              sessions[newAddress.toLowerCase()] = {
+                token: verifyData.sessionToken,
+                expiresAt: Date.now() + verifyData.expiresIn * 1000,
+              };
+              localStorage.setItem(
+                "mailbox_sessions",
+                JSON.stringify(sessions)
+              );
+            }
           }
         } catch (verifyError) {
           console.error("Failed to auto-create session:", verifyError);
@@ -350,10 +480,9 @@ export function InboxInterface({
       const res = await fetch(url);
       const data = await res.json();
 
-      // Handle verification required response
+      // If verification required, just show empty inbox (for guests accessing protected mailbox)
       if (data.requiresVerification) {
-        // Session expired or invalid - reload page to trigger verification
-        window.location.reload();
+        console.log("Inbox requires verification");
         return;
       }
 

@@ -12,7 +12,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       authClient={authClient}
       navigate={(path) => router.push(path)}
       replace={(path) => router.replace(path)}
-      onSessionChange={() => router.refresh()}
       localization={{}}
     >
       {children}

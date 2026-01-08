@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Loader2, Key, Shield, Lock, Eye, EyeOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useSession } from "@/lib/auth-client";
 
 interface MailboxVerifyModalProps {
   email: string;
@@ -21,6 +22,7 @@ export function MailboxVerifyModal({
   const [recoveryKey, setRecoveryKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [showKey, setShowKey] = useState(false);
+  const { data: session } = useSession();
 
   const handleVerify = async () => {
     if (!recoveryKey.trim()) {
@@ -48,15 +50,27 @@ export function MailboxVerifyModal({
       }
 
       if (data.sessionToken) {
-        // Store session in localStorage for this email
-        const sessions = JSON.parse(
-          localStorage.getItem("mailbox_sessions") || "{}"
-        );
-        sessions[email.toLowerCase()] = {
-          token: data.sessionToken,
-          expiresAt: Date.now() + data.expiresIn * 1000,
-        };
-        localStorage.setItem("mailbox_sessions", JSON.stringify(sessions));
+        // Save session - database for logged-in, localStorage for guests
+        if (session) {
+          try {
+            await fetch("/api/user/sessions", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email }),
+            });
+          } catch (e) {
+            console.error("Failed to save session to database:", e);
+          }
+        } else {
+          const sessions = JSON.parse(
+            localStorage.getItem("mailbox_sessions") || "{}"
+          );
+          sessions[email.toLowerCase()] = {
+            token: data.sessionToken,
+            expiresAt: Date.now() + data.expiresIn * 1000,
+          };
+          localStorage.setItem("mailbox_sessions", JSON.stringify(sessions));
+        }
 
         toast.success("Access verified!");
         onVerified(data.sessionToken);
@@ -95,18 +109,18 @@ export function MailboxVerifyModal({
           className="relative z-50 w-full max-w-md"
         >
           {/* Glassmorphism Card */}
-          <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-slate-900/80 backdrop-blur-xl shadow-2xl">
+          <div className="relative overflow-hidden rounded-xl border border-white/10 glass-card backdrop-blur-xl shadow-2xl">
             {/* Gradient orbs for visual effect */}
-            <div className="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-purple-500/20 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -top-24 -right-24 w-48 h-48 glass-card rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-24 -left-24 w-48 h-48 glass-card rounded-full blur-3xl pointer-events-none" />
 
             {/* Content */}
             <div className="relative p-8 space-y-6">
               {/* Header */}
               <div className="text-center space-y-4">
                 {/* Icon */}
-                <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-white/10 flex items-center justify-center">
-                  <Shield className="h-8 w-8 text-cyan-400" />
+                <div className="mx-auto w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center">
+                  <Shield className="h-8 w-8 text-white-400" />
                 </div>
 
                 <div className="space-y-2">
@@ -115,7 +129,7 @@ export function MailboxVerifyModal({
                   </h2>
                   <p className="text-sm text-muted-foreground leading-relaxed">
                     Enter your recovery key to access this mailbox. <br />
-                    <span className="text-cyan-400/80 font-medium">
+                    <span className="text-white/50 font-medium">
                       Each email requires separate verification.
                     </span>
                   </p>
@@ -175,7 +189,7 @@ export function MailboxVerifyModal({
                   </Button>
                 )}
                 <Button
-                  className={`flex-1 h-12 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium shadow-lg shadow-cyan-500/20 transition-all ${
+                  className={`flex-1 h-12 bg-white hover:bg-white/70 text-black font-medium shadow-lg shadow-cyan-500/20 transition-all ${
                     !onCancel ? "w-full" : ""
                   }`}
                   onClick={handleVerify}
@@ -197,7 +211,7 @@ export function MailboxVerifyModal({
 
               {/* Footer Note */}
               <p className="text-xs text-center text-muted-foreground/70">
-                Session expires in 24 hours for security.
+                Don't share your recovery key with anyone, keep it safe.
               </p>
             </div>
           </div>

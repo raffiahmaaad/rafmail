@@ -122,7 +122,7 @@ export function AddressPageClient({ address }: AddressPageClientProps) {
       <div className="flex-1 py-12">
         <div className="text-center max-w-2xl mx-auto px-4 mb-12 space-y-4">
           <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-white to-white/50">
-            Disposable Email <br /> for Developers
+            Disposable Email <br /> for Everyone.
           </h1>
           <p className="text-muted-foreground text-lg">
             Secure, serverless temporary email service deployed on Vercel. Bring

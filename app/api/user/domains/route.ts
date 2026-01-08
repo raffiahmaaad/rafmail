@@ -1,33 +1,39 @@
 import { auth } from "@/lib/auth";
-import { redis } from "@/lib/redis";
+import { db } from "@/lib/db";
+import { userDomains } from "@/lib/schema";
+import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 const DEFAULT_DOMAINS = ["rafxyz.web.id"];
 
-// GET: Fetch user's custom domains
+/**
+ * GET: Fetch user's custom domains from PostgreSQL
+ */
 export async function GET() {
   try {
     const session = await auth.api.getSession({
       headers: await headers(),
     });
 
-    if (!session) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const userEmail = session.user.email;
-    const key = `user:${userEmail}:domains`;
+    const domains = await db
+      .select({
+        domain: userDomains.domain,
+        verified: userDomains.verified,
+      })
+      .from(userDomains)
+      .where(eq(userDomains.userId, session.user.id));
 
-    // Get custom domains from Redis Set
-    const customDomains = await redis.smembers(key);
-
-    // Combine with default domains
+    const customDomains = domains.map((d) => d.domain);
     const allDomains = [...DEFAULT_DOMAINS, ...customDomains];
 
     return NextResponse.json({
       domains: allDomains,
-      customDomains: customDomains,
+      customDomains: domains,
     });
   } catch (error) {
     console.error("Error fetching domains:", error);
@@ -38,30 +44,29 @@ export async function GET() {
   }
 }
 
-// POST: Add a new custom domain
+/**
+ * POST: Add a new custom domain
+ */
 export async function POST(request: NextRequest) {
   try {
     const session = await auth.api.getSession({
       headers: await headers(),
     });
 
-    if (!session) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { domain } = await request.json();
+    const { domain, verified } = await request.json();
 
     if (!domain || typeof domain !== "string") {
-      return NextResponse.json(
-        { error: "Invalid domain" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Invalid domain" }, { status: 400 });
     }
 
     const cleanDomain = domain.trim().toLowerCase();
 
     // Validate domain format
-    const domainRegex = /^[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,}$/;
+    const domainRegex = /^[a-z0-9]+([-\.]{1}[a-z0-9]+)*\.[a-z]{2,}$/;
     if (!domainRegex.test(cleanDomain)) {
       return NextResponse.json(
         { error: "Invalid domain format" },
@@ -77,11 +82,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const userEmail = session.user.email;
-    const key = `user:${userEmail}:domains`;
-
-    // Add domain to user's set
-    await redis.sadd(key, cleanDomain);
+    // Upsert domain
+    await db
+      .insert(userDomains)
+      .values({
+        userId: session.user.id,
+        domain: cleanDomain,
+        verified: verified ?? false,
+      })
+      .onConflictDoUpdate({
+        target: [userDomains.userId, userDomains.domain],
+        set: {
+          verified: verified ?? false,
+        },
+      });
 
     return NextResponse.json({ success: true, domain: cleanDomain });
   } catch (error) {
@@ -93,24 +107,23 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE: Remove a custom domain
+/**
+ * DELETE: Remove a custom domain
+ */
 export async function DELETE(request: NextRequest) {
   try {
     const session = await auth.api.getSession({
       headers: await headers(),
     });
 
-    if (!session) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { domain } = await request.json();
 
     if (!domain || typeof domain !== "string") {
-      return NextResponse.json(
-        { error: "Invalid domain" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Invalid domain" }, { status: 400 });
     }
 
     const cleanDomain = domain.trim().toLowerCase();
@@ -123,11 +136,12 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const userEmail = session.user.email;
-    const key = `user:${userEmail}:domains`;
-
-    // Remove domain from user's set
-    await redis.srem(key, cleanDomain);
+    await db
+      .delete(userDomains)
+      .where(
+        eq(userDomains.userId, session.user.id) &&
+          eq(userDomains.domain, cleanDomain)
+      );
 
     return NextResponse.json({ success: true });
   } catch (error) {
