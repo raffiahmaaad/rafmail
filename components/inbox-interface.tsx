@@ -111,11 +111,13 @@ const formatSenderEmail = (from: string): string => {
 interface InboxInterfaceProps {
   initialAddress?: string;
   initialUsername?: string;
+  sessionToken?: string | null;
 }
 
 export function InboxInterface({
   initialAddress,
   initialUsername,
+  sessionToken,
 }: InboxInterfaceProps) {
   const [address, setAddress] = useState<string>(initialAddress || "");
   const [domain, setDomain] = useState<string>("rafxyz.web.id");
@@ -315,13 +317,21 @@ export function InboxInterface({
     if (!address) return;
     try {
       setLoading(true);
-      const res = await fetch(
-        `/api/inbox?address=${encodeURIComponent(address)}`
-      );
+      let url = `/api/inbox?address=${encodeURIComponent(address)}`;
+      if (sessionToken) {
+        url += `&session=${encodeURIComponent(sessionToken)}`;
+      }
+      const res = await fetch(url);
       const data = await res.json();
+
+      // Handle verification required response
+      if (data.requiresVerification) {
+        // Session expired or invalid - reload page to trigger verification
+        window.location.reload();
+        return;
+      }
+
       if (data.emails) {
-        // Only update if changes to avoid jitter, or just replace for now
-        // De-dupe could be handled here
         setEmails(data.emails);
       }
     } catch (e) {
@@ -329,7 +339,7 @@ export function InboxInterface({
     } finally {
       setLoading(false);
     }
-  }, [address]);
+  }, [address, sessionToken]);
 
   // Initial fetch
   useEffect(() => {
