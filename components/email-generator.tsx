@@ -167,6 +167,32 @@ export function EmailGenerator({ onAliasCreated }: EmailGeneratorProps) {
         }),
       });
 
+      // AUTO-CREATE SESSION: So creator can access mailbox immediately without entering key
+      try {
+        const verifyRes = await fetch("/api/verify-access", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: email,
+            recoveryKey: data.token,
+          }),
+        });
+        const verifyData = await verifyRes.json();
+        if (verifyData.sessionToken) {
+          // Store session in localStorage
+          const sessions = JSON.parse(
+            localStorage.getItem("mailbox_sessions") || "{}"
+          );
+          sessions[email.toLowerCase()] = {
+            token: verifyData.sessionToken,
+            expiresAt: Date.now() + verifyData.expiresIn * 1000,
+          };
+          localStorage.setItem("mailbox_sessions", JSON.stringify(sessions));
+        }
+      } catch (verifyError) {
+        console.error("Failed to auto-create session:", verifyError);
+      }
+
       // If logged in, save to user's account
       if (session) {
         await fetch("/api/user/emails", {
