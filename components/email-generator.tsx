@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { generateEmailUsername } from "@/lib/name-generator";
 
 const DURATION_OPTIONS = [
   { label: "1h", value: 3600, description: "1 Hour" },
@@ -61,36 +62,9 @@ export function EmailGenerator({ onAliasCreated }: EmailGeneratorProps) {
     }
   }, [session]);
 
-  // Generate random username
+  // Generate random username using real names from various countries
   const generateRandomUsername = () => {
-    const adjectives = [
-      "swift",
-      "brave",
-      "calm",
-      "dark",
-      "eager",
-      "fair",
-      "glad",
-      "happy",
-      "keen",
-      "lively",
-    ];
-    const nouns = [
-      "wolf",
-      "hawk",
-      "lion",
-      "bear",
-      "tiger",
-      "eagle",
-      "fox",
-      "deer",
-      "owl",
-      "raven",
-    ];
-    const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
-    const noun = nouns[Math.floor(Math.random() * nouns.length)];
-    const num = Math.floor(Math.random() * 900) + 100;
-    return `${adj}.${noun}${num}`;
+    return generateEmailUsername();
   };
 
   // Load domains from API for logged-in users

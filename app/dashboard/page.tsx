@@ -783,7 +783,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between p-3 rounded-lg bg-black/20 border border-white/5">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-green-400" />
-                <span className="font-mono text-sm text-white">
+                <span className="font-medium text-sm text-white">
                   {DEFAULT_DOMAINS[0]}
                 </span>
               </div>
@@ -804,7 +804,7 @@ export default function DashboardPage() {
                   ) : (
                     <AlertTriangle className="h-4 w-4 text-amber-400" />
                   )}
-                  <span className="font-mono text-sm text-white">{domain}</span>
+                  <span className="font-medium text-sm text-white">{domain}</span>
                   {!verifiedDomains.has(domain) && (
                     <span className="text-xs text-amber-400/70">
                       (unverified)
