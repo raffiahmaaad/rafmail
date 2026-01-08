@@ -2,6 +2,7 @@ import { redis } from '@/lib/redis';
 import { NextResponse } from 'next/server';
 import { extractEmail } from '@/lib/utils';
 import crypto from 'crypto';
+import { getAblyServer, getInboxChannel } from '@/lib/ably';
 
 export async function POST(req: Request) {
   try {
@@ -45,10 +46,11 @@ export async function POST(req: Request) {
       read: false
     };
 
-    const key = `inbox:${cleanTo}`;
+    const normalizedEmail = cleanTo.toLowerCase();
+    const key = `inbox:${normalizedEmail}`;
     
     // Check for custom retention settings
-    const settingsKey = `settings:${cleanTo}`;
+    const settingsKey = `settings:${normalizedEmail}`;
     const settingsRaw = await redis.get(settingsKey);
     let retention = 86400; // Default 24h
 
@@ -77,6 +79,23 @@ export async function POST(req: Request) {
     // If retention is -1 (Forever), don't set expiry
     if (retention !== -1) {
       await redis.expire(key, retention);
+    }
+
+    // Publish realtime notification via Ably
+    try {
+      const ably = getAblyServer();
+      if (ably) {
+        const channel = ably.channels.get(getInboxChannel(normalizedEmail));
+        await channel.publish('new-email', {
+          id: emailId,
+          from,
+          subject: subject || '(No Subject)',
+          receivedAt: emailData.receivedAt
+        });
+      }
+    } catch (ablyError) {
+      // Don't fail the request if Ably fails, just log it
+      console.error('Ably publish error:', ablyError);
     }
 
     return NextResponse.json({ success: true, id: emailId });

@@ -27,6 +27,8 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
+import Ably from "ably";
+import { getInboxChannel, ABLY_PUBLIC_KEY } from "@/lib/ably";
 
 // Types
 interface Email {
@@ -340,6 +342,28 @@ export function InboxInterface({
     const interval = setInterval(fetchEmails, 5000);
     return () => clearInterval(interval);
   }, [autoRefresh, fetchEmails]);
+
+  // Ably Realtime subscription for instant email notifications
+  useEffect(() => {
+    if (!address || !ABLY_PUBLIC_KEY) return;
+
+    const ably = new Ably.Realtime(ABLY_PUBLIC_KEY);
+    const channelName = getInboxChannel(address);
+    const channel = ably.channels.get(channelName);
+
+    channel.subscribe("new-email", (message) => {
+      // New email received! Refresh inbox
+      fetchEmails();
+      toast.success(`Email baru dari ${message.data?.from || "someone"}`, {
+        description: message.data?.subject || "(No Subject)",
+      });
+    });
+
+    return () => {
+      channel.unsubscribe();
+      ably.close();
+    };
+  }, [address, fetchEmails]);
 
   return (
     <div className="w-full max-w-6xl mx-auto p-3 sm:p-4 md:p-8 space-y-4 sm:space-y-6 md:space-y-8">
