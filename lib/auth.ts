@@ -8,6 +8,11 @@ const pool = new Pool({
 
 export const auth = betterAuth({
   database: pool,
+  trustedOrigins: [
+    "http://localhost:3000",
+    "https://rafmail.vercel.app",
+    process.env.BETTER_AUTH_URL || "",
+  ].filter(Boolean),
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 6,
