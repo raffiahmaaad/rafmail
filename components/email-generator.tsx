@@ -45,9 +45,21 @@ export function EmailGenerator({ onAliasCreated }: EmailGeneratorProps) {
   const [username, setUsername] = useState("");
   const [domain, setDomain] = useState(DEFAULT_DOMAINS[0]);
   const [savedDomains, setSavedDomains] = useState<string[]>(DEFAULT_DOMAINS);
-  const [duration, setDuration] = useState(DURATION_OPTIONS[4].value); // Default: permanent
+  // Default: permanent for logged-in, 24h for guest
+  const [duration, setDuration] = useState(
+    session ? DURATION_OPTIONS[4].value : 86400
+  );
   const [loading, setLoading] = useState(false);
   const [generatingRandom, setGeneratingRandom] = useState(false);
+
+  // Update duration when session changes
+  useEffect(() => {
+    if (session) {
+      setDuration(DURATION_OPTIONS[4].value); // Permanent for logged-in users
+    } else {
+      setDuration(86400); // 24h for guests
+    }
+  }, [session]);
 
   // Generate random username
   const generateRandomUsername = () => {
@@ -81,17 +93,30 @@ export function EmailGenerator({ onAliasCreated }: EmailGeneratorProps) {
     return `${adj}.${noun}${num}`;
   };
 
-  // Load saved domains and generate initial username
+  // Load domains from API for logged-in users
   useEffect(() => {
-    const savedDoms = localStorage.getItem("dispo_domains");
-    if (savedDoms) {
-      const parsed = JSON.parse(savedDoms);
-      setSavedDomains([...new Set([...DEFAULT_DOMAINS, ...parsed])]);
-    }
-
     // Generate initial random username
     setUsername(generateRandomUsername());
-  }, []);
+
+    // Fetch domains for logged-in users only
+    if (session) {
+      const fetchDomains = async () => {
+        try {
+          const res = await fetch("/api/user/domains");
+          const data = await res.json();
+          if (data.domains) {
+            setSavedDomains(data.domains);
+          }
+        } catch (error) {
+          console.error("Error fetching domains:", error);
+        }
+      };
+      fetchDomains();
+    } else {
+      // Guest users only get default domain
+      setSavedDomains(DEFAULT_DOMAINS);
+    }
+  }, [session]);
 
   const handleRefreshUsername = () => {
     setGeneratingRandom(true);
@@ -125,11 +150,11 @@ export function EmailGenerator({ onAliasCreated }: EmailGeneratorProps) {
     setLoading(true);
 
     try {
-      // Generate recovery token
+      // Generate recovery token (pass session info for TTL decision)
       const res = await fetch("/api/recovery", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, isLoggedIn: !!session }),
       });
       const data = await res.json();
 
@@ -164,6 +189,7 @@ export function EmailGenerator({ onAliasCreated }: EmailGeneratorProps) {
         body: JSON.stringify({
           address: email,
           retentionSeconds: duration,
+          isLoggedIn: !!session,
         }),
       });
 
@@ -235,9 +261,6 @@ export function EmailGenerator({ onAliasCreated }: EmailGeneratorProps) {
         {/* Header */}
         <div className="p-6 pb-4 border-b border-white/5">
           <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center">
-              <Mail className="h-6 w-6 text-white" />
-            </div>
             <div>
               <h2 className="text-xl font-bold text-white">
                 Create Email Alias
@@ -297,8 +320,8 @@ export function EmailGenerator({ onAliasCreated }: EmailGeneratorProps) {
                   placeholder="yourname"
                   disabled={emailType === "random"}
                   className={cn(
-                    "font-mono bg-black/30 border-white/10 h-12 pr-32",
-                    emailType === "random" && "text-purple-300"
+                    "font-medium text-sm bg-black/30 border-white/10 h-12 pr-32",
+                    emailType === "random" && "text-white"
                   )}
                 />
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
@@ -331,68 +354,87 @@ export function EmailGenerator({ onAliasCreated }: EmailGeneratorProps) {
             )}
           </div>
 
-          {/* Domain Selector */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-white flex items-center gap-2">
-              <Globe className="h-4 w-4 text-blue-400" />
-              Domain
-            </label>
-            <div className="relative">
-              <select
-                value={domain}
-                onChange={(e) => setDomain(e.target.value)}
-                className="w-full h-12 px-4 pr-10 rounded-xl border border-white/10 bg-black/30 text-white appearance-none focus:outline-none focus:ring-2 focus:ring-purple-500/50"
-              >
-                {savedDomains.map((d) => (
-                  <option key={d} value={d} className="bg-slate-900">
-                    {d}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none" />
-            </div>
-          </div>
-
-          {/* Duration Selector */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-white flex items-center gap-2">
-              <Clock className="h-4 w-4 text-purple-400" />
-              Email Duration
-            </label>
-            <div className="grid grid-cols-5 gap-2">
-              {DURATION_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => setDuration(opt.value)}
-                  className={cn(
-                    "py-3 px-2 rounded-xl font-medium text-sm transition-all border",
-                    duration === opt.value
-                      ? "bg-purple-500/20 text-purple-300 border-purple-500/50"
-                      : "bg-black/20 text-muted-foreground border-white/5 hover:bg-white/5 hover:text-white"
-                  )}
+          {/* Domain Selector - Only for logged-in users */}
+          {session && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-white flex items-center gap-2">
+                Domain
+              </label>
+              <div className="relative">
+                <select
+                  value={domain}
+                  onChange={(e) => setDomain(e.target.value)}
+                  className="w-full h-12 px-4 pr-10 rounded-md bg-black/30 text-white/40 appearance-none focus:outline-none focus:ring-2 focus:ring-white/20"
                 >
-                  {opt.label}
-                </button>
-              ))}
+                  {savedDomains.map((d) => (
+                    <option key={d} value={d} className="bg-black/30">
+                      {d}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none" />
+              </div>
             </div>
-            <p className="text-xs text-amber-400 flex items-center gap-1">
-              <span>✨</span>
-              {selectedDurationOption?.description}
-            </p>
-          </div>
+          )}
+
+          {/* Duration Selector - Only for logged-in users */}
+          {session ? (
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-white flex items-center gap-2">
+                Email Duration
+              </label>
+              <div className="grid grid-cols-5 gap-2">
+                {DURATION_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setDuration(opt.value)}
+                    className={cn(
+                      "py-3 px-2 rounded-xl font-medium text-sm transition-all border",
+                      duration === opt.value
+                        ? "bg-white/20 text-white border-muted-foreground"
+                        : "bg-black/20 text-white border-white/5 hover:bg-white/5 hover:text-white"
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-white/50 flex items-center gap-1">
+                <span></span>
+                {selectedDurationOption?.description}
+              </p>
+            </div>
+          ) : (
+            <div className="bg-black/20 rounded-xl p-4 border border-white/5">
+              <div className="flex items-center gap-2 text-amber-400 mb-2">
+                <Clock className="h-4 w-4" />
+                <span className="text-sm font-medium">Guest Mode</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Email expires in{" "}
+                <span className="text-white font-medium">24 hours</span>.
+                <a
+                  href="/auth/signin"
+                  className="text-white underline hover:text-white/80 ml-1"
+                >
+                  Sign in
+                </a>{" "}
+                for permanent emails.
+              </p>
+            </div>
+          )}
 
           {/* Create Button */}
           <Button
             onClick={handleCreateAlias}
             disabled={loading}
-            className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 transition-all shadow-lg shadow-purple-500/20"
+            className="w-full h-12 text-lg font-semibold bg-white"
           >
             {loading ? (
               <Loader2 className="h-5 w-5 animate-spin mr-2" />
             ) : (
-              <Zap className="h-5 w-5 mr-2" />
+              "Create Alias"
             )}
-            {loading ? "Creating..." : "Create Alias"}
           </Button>
         </div>
       </div>

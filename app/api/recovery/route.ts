@@ -5,7 +5,7 @@ import crypto from "crypto";
 // Generate a recovery token for an email address
 export async function POST(request: NextRequest) {
   try {
-    const { email } = await request.json();
+    const { email, isLoggedIn } = await request.json();
     
     if (!email || !email.includes("@")) {
       return NextResponse.json({ error: "Invalid email" }, { status: 400 });
@@ -15,19 +15,30 @@ export async function POST(request: NextRequest) {
     const tokenId = crypto.randomBytes(32).toString("base64url");
     const token = `${tokenId}.${Buffer.from(email).toString("base64url")}`;
     
-    // Store in Redis with 30 day TTL
+    // TTL based on login status:
+    // - Logged in: No TTL (permanent)
+    // - Guest: 24 hours (86400 seconds)
+    const ttl = isLoggedIn ? null : 86400;
+    const expiresInLabel = isLoggedIn ? "Never (permanent)" : "24 hours";
+    
+    // Store in Redis
     const tokenKey = `recovery:${tokenId}`;
     await redis.set(tokenKey, email);
-    await redis.expire(tokenKey, 30 * 24 * 60 * 60); // 30 days
+    if (ttl) {
+      await redis.expire(tokenKey, ttl);
+    }
     
     // Also store by email for reverse lookup
     const emailTokenKey = `email:${email}:token`;
     await redis.set(emailTokenKey, token);
-    await redis.expire(emailTokenKey, 30 * 24 * 60 * 60); // 30 days
+    if (ttl) {
+      await redis.expire(emailTokenKey, ttl);
+    }
 
     return NextResponse.json({ 
       token,
-      expiresIn: "30 days"
+      expiresIn: expiresInLabel,
+      isGuest: !isLoggedIn
     });
   } catch (error) {
     console.error("Recovery token error:", error);

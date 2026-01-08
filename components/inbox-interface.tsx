@@ -375,7 +375,7 @@ export function InboxInterface({
   // Polling
   useEffect(() => {
     if (!autoRefresh) return;
-    const interval = setInterval(fetchEmails, 5000);
+    const interval = setInterval(fetchEmails, 10000);
     return () => clearInterval(interval);
   }, [autoRefresh, fetchEmails]);
 
@@ -407,12 +407,12 @@ export function InboxInterface({
       <div className="glass-card rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 relative z-10">
         <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
           <div className="space-y-1 text-center md:text-left">
-            <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">
+            <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-white">
               Your Temporary Inbox
             </h2>
             <p className="text-muted-foreground text-sm">
               Waiting for emails at this address. Messages auto-delete after{" "}
-              <span className="text-purple-400 font-medium">
+              <span className="text-white font-medium">
                 {RETENTION_OPTIONS.find((o) => o.value === retention)?.label ||
                   "24 Hours"}
               </span>
@@ -425,8 +425,8 @@ export function InboxInterface({
                 loading ? "bg-yellow-400 animate-pulse" : "bg-green-400"
               }`}
             />
-            <span className="text-xs text-muted-foreground uppercase tracking-wider font-mono">
-              {loading ? "Syncing..." : "Live"}
+            <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+              {loading ? "Syncing" : "Live"}
             </span>
           </div>
         </div>
@@ -454,15 +454,28 @@ export function InboxInterface({
                 <Copy className="h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
 
-              {/* Settings Button */}
+              {/* Settings Button - Premium feature for logged-in users only */}
+              {session && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsAddDomainOpen(true)}
+                  className="h-10 w-10 sm:h-12 sm:w-12 border border-white/10 hover:bg-white/5"
+                  title="Settings"
+                >
+                  <Settings2 className="h-4 w-4 sm:h-5 sm:w-5" />
+                </Button>
+              )}
+
+              {/* Recovery Token Button */}
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setIsAddDomainOpen(true)}
+                onClick={() => fetchRecoveryKey(address)}
                 className="h-10 w-10 sm:h-12 sm:w-12 border border-white/10 hover:bg-white/5"
-                title="Settings"
+                title="Recovery Token"
               >
-                <Settings2 className="h-4 w-4 sm:h-5 sm:w-5" />
+                <Key className="h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
 
               {/* History Button */}
@@ -479,7 +492,7 @@ export function InboxInterface({
                 >
                   <History className="h-4 w-4 sm:h-5 sm:w-5" />
                   {history.length > 0 && (
-                    <span className="absolute top-2 right-2 h-2 w-2 bg-blue-500 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
+                    <span className="absolute top-2 right-1 h-2 w-2 bg-blue-500 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
                   )}
                 </Button>
 
@@ -546,18 +559,7 @@ export function InboxInterface({
                                       : "Click to restore"}
                                   </p>
                                 </div>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-cyan-500/20 hover:text-cyan-400"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    fetchRecoveryKey(histAddr);
-                                  }}
-                                  title="View recovery key"
-                                >
-                                  <Key className="h-3.5 w-3.5" />
-                                </Button>
+
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -634,7 +636,7 @@ export function InboxInterface({
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Key className="h-5 w-5 text-cyan-400" />
+                    <Key className="h-5 w-5 text-white" />
                     <h3 className="font-semibold text-lg">Recovery Key</h3>
                   </div>
                   <Button
@@ -650,7 +652,7 @@ export function InboxInterface({
                   </Button>
                 </div>
 
-                <p className="text-sm text-muted-foreground font-mono truncate">
+                <p className="text-md text-white font-medium truncate">
                   {viewingRecoveryKey}
                 </p>
 
@@ -664,13 +666,13 @@ export function InboxInterface({
                       <p className="text-xs text-muted-foreground mb-2">
                         Recovery Token
                       </p>
-                      <code className="text-xs break-all text-cyan-300 block">
+                      <code className="text-xs break-all text-white block">
                         {viewingRecoveryToken}
                       </code>
                     </div>
                     <div className="flex gap-2">
                       <Button
-                        className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-600"
+                        className="flex-1 bg-white"
                         onClick={copyRecoveryToken}
                       >
                         <Copy className="h-4 w-4 mr-2" />
@@ -696,9 +698,9 @@ export function InboxInterface({
         {/* Email List */}
         <div className="md:col-span-1 glass-card rounded-2xl overflow-hidden flex flex-col h-[280px] sm:h-[350px] md:h-auto">
           <div className="p-4 border-b border-white/5 flex justify-between items-center">
-            <h3 className="font-semibold flex items-center gap-2">
-              <Mail className="h-4 w-4 text-blue-400" /> Inbox
-              <span className="text-xs bg-white/10 px-2 py-0.5 rounded-full text-muted-foreground">
+            <h3 className="font-semibold flex items-center ml-2">
+              Inbox
+              <span className="text-xs bg-white/10 px-2 py-0.5 ml-2 rounded-full text-muted-foreground">
                 {emails.length}
               </span>
             </h3>
@@ -719,7 +721,7 @@ export function InboxInterface({
                   animate={{ opacity: 1 }}
                   className="h-full flex flex-col items-center justify-center text-center p-4 text-muted-foreground space-y-2 opacity-50"
                 >
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
+                  <Loader2 className="h-8 w-8 animate-spin text-white" />
                   <p>Waiting for incoming mail...</p>
                 </motion.div>
               ) : (
@@ -734,7 +736,7 @@ export function InboxInterface({
                     className={cn(
                       "p-4 rounded-xl cursor-pointer transition-all border border-transparent hover:bg-white/5",
                       selectedEmail?.id === email.id
-                        ? "bg-white/10 border-blue-500/30"
+                        ? "bg-white/10 border-white/30"
                         : ""
                     )}
                   >

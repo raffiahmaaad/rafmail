@@ -77,9 +77,6 @@ export function AddressPageClient({ address }: AddressPageClientProps) {
 
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center space-y-4">
-            <div className="h-12 w-12 mx-auto rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center animate-pulse">
-              <Shield className="h-6 w-6 text-white" />
-            </div>
             <p className="text-muted-foreground">Checking access...</p>
           </div>
         </div>
@@ -116,9 +113,6 @@ export function AddressPageClient({ address }: AddressPageClientProps) {
             href="/"
             className="flex items-center gap-2 font-bold text-xl hover:opacity-80 transition-opacity"
           >
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-              <Shield className="h-5 w-5 text-white" />
-            </div>
             <span>RafMail</span>
           </a>
         </div>
@@ -137,25 +131,6 @@ export function AddressPageClient({ address }: AddressPageClientProps) {
         </div>
 
         <InboxInterface initialAddress={address} sessionToken={sessionToken} />
-
-        {/* Features Grid */}
-        <div className="max-w-6xl mx-auto px-4 mt-24 grid md:grid-cols-3 gap-8">
-          <Feature
-            icon={<Zap className="h-6 w-6 text-yellow-400" />}
-            title="Instant & Real-time"
-            desc="Emails arrive instantly via Webhooks. The inbox auto-refreshes in real-time."
-          />
-          <Feature
-            icon={<Shield className="h-6 w-6 text-green-400" />}
-            title="Privacy First"
-            desc="No tracking. Emails traverse your infrastructure and are stored in Redis with 24h TTL."
-          />
-          <Feature
-            icon={<Globe className="h-6 w-6 text-blue-400" />}
-            title="Custom Domains"
-            desc="Point your domain's MX records to your Cloudflare/Mailgun and route emails here."
-          />
-        </div>
       </div>
 
       <footer className="border-t border-white/5 py-8 mt-12 text-center text-muted-foreground text-sm">

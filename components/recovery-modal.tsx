@@ -58,10 +58,10 @@ export function RecoveryModal({ open, onOpenChange }: RecoveryModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md bg-slate-900 border-white/10">
+      <DialogContent className="sm:max-w-md glass-card">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Key className="h-5 w-5 text-cyan-400" />
+          <DialogTitle className="flex items-center gap-2 mb-2">
+            <Key className="h-5 w-5 text-white" />
             Recover Email
           </DialogTitle>
           <DialogDescription>
@@ -69,7 +69,7 @@ export function RecoveryModal({ open, onOpenChange }: RecoveryModalProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 pt-4">
+        <div className="space-y-4 pt-1">
           <Input
             value={token}
             onChange={(e) => setToken(e.target.value)}
@@ -88,7 +88,7 @@ export function RecoveryModal({ open, onOpenChange }: RecoveryModalProps) {
               Cancel
             </Button>
             <Button
-              className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-600"
+              className="flex-1 bg-white"
               onClick={handleRecover}
               disabled={loading}
             >

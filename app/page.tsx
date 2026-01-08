@@ -24,9 +24,6 @@ export default function Home() {
       <header className="border-b border-white/5 bg-background/50 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 font-bold text-xl">
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-              <Shield className="h-5 w-5 text-white" />
-            </div>
             <span>RafMail</span>
           </div>
 
@@ -68,25 +65,6 @@ export default function Home() {
         </div>
 
         <EmailGenerator />
-
-        {/* Features Grid */}
-        <div className="max-w-4xl mx-auto px-4 mt-16 grid sm:grid-cols-3 gap-6">
-          <Feature
-            icon={<Zap className="h-5 w-5 text-yellow-400" />}
-            title="Instant & Real-time"
-            desc="Emails arrive instantly. Auto-refresh enabled."
-          />
-          <Feature
-            icon={<Shield className="h-5 w-5 text-green-400" />}
-            title="Privacy First"
-            desc="No tracking. Emails stored with configurable TTL."
-          />
-          <Feature
-            icon={<Globe className="h-5 w-5 text-blue-400" />}
-            title="Custom Domains"
-            desc="Use your own domain or our defaults."
-          />
-        </div>
       </div>
 
       <footer className="border-t border-white/5 py-6 text-center text-muted-foreground text-sm">

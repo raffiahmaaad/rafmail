@@ -15,9 +15,6 @@ export default function SignUpPage() {
       <header className="border-b border-white/5 bg-background/50 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-              <Shield className="h-5 w-5 text-white" />
-            </div>
             <span>RafMail</span>
           </Link>
         </div>

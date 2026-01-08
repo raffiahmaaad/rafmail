@@ -93,9 +93,6 @@ export function MailboxPageClient({ username }: MailboxPageClientProps) {
 
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center space-y-4">
-            <div className="h-12 w-12 mx-auto rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center animate-pulse">
-              <Shield className="h-6 w-6 text-white" />
-            </div>
             <p className="text-muted-foreground">Checking access...</p>
           </div>
         </div>
@@ -134,9 +131,6 @@ export function MailboxPageClient({ username }: MailboxPageClientProps) {
             href="/"
             className="flex items-center gap-2 font-bold text-xl hover:opacity-80 transition-opacity"
           >
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-              <Shield className="h-5 w-5 text-white" />
-            </div>
             <span>RafMail</span>
           </Link>
 

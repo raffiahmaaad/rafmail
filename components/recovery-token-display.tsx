@@ -102,7 +102,7 @@ export function RecoveryTokenDisplay({
           </div>
 
           <Button
-            className="w-full bg-gradient-to-r from-cyan-500 to-blue-600"
+            className="w-full bg-white"
             onClick={() => onOpenChange(false)}
           >
             Done
