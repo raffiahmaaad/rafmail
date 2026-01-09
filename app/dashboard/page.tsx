@@ -596,7 +596,7 @@ export default function DashboardPage() {
                         </p>
                         <div className="flex items-center gap-2 mt-1">
                           <code className="bg-black/40 px-3 py-2 rounded text-xs text-green-400 break-all flex-1">
-                            POST https://rafmail.vercel.app/api/webhook
+                            POST https://rafmail.web.id/api/webhook
                           </code>
                           <Button
                             type="button"
@@ -605,7 +605,7 @@ export default function DashboardPage() {
                             className="h-8 w-8 flex-shrink-0 hover:bg-white/5"
                             onClick={() =>
                               copyToClipboard(
-                                "https://rafmail.vercel.app/api/webhook",
+                                "https://rafmail.web.id/api/webhook",
                                 "Webhook URL"
                               )
                             }
@@ -804,7 +804,9 @@ export default function DashboardPage() {
                   ) : (
                     <AlertTriangle className="h-4 w-4 text-amber-400" />
                   )}
-                  <span className="font-medium text-sm text-white">{domain}</span>
+                  <span className="font-medium text-sm text-white">
+                    {domain}
+                  </span>
                   {!verifiedDomains.has(domain) && (
                     <span className="text-xs text-amber-400/70">
                       (unverified)

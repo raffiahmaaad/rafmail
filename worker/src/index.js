@@ -9,7 +9,7 @@ export default {
 
       // Replace with your actual Vercel app URL
       // If testing locally, you'd need a tunnel (ngrok). For prod, use your vercel.app domain.
-      const TARGET_URL = "https://rafmail.vercel.app/api/webhook";
+      const TARGET_URL = "https://rafmail.web.id/api/webhook";
 
       const response = await fetch(TARGET_URL, {
         method: "POST",

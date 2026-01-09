@@ -10,7 +10,7 @@ export const auth = betterAuth({
   }),
   trustedOrigins: [
     "http://localhost:3000",
-    "https://rafmail.vercel.app",
+    "https://rafmail.web.id",
     process.env.BETTER_AUTH_URL || "",
   ].filter(Boolean),
   emailAndPassword: {
