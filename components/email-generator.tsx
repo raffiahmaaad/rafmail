@@ -46,9 +46,12 @@ export function EmailGenerator({ onAliasCreated }: EmailGeneratorProps) {
   const [username, setUsername] = useState("");
   const [domain, setDomain] = useState(DEFAULT_DOMAINS[0]);
   const [savedDomains, setSavedDomains] = useState<string[]>(DEFAULT_DOMAINS);
+  const [globalDomainsList, setGlobalDomainsList] =
+    useState<string[]>(DEFAULT_DOMAINS);
+  const [personalDomainsList, setPersonalDomainsList] = useState<string[]>([]);
   // Default: permanent for logged-in, 24h for guest
   const [duration, setDuration] = useState(
-    session ? DURATION_OPTIONS[4].value : 86400
+    session ? DURATION_OPTIONS[4].value : 3600
   );
   const [loading, setLoading] = useState(false);
   const [generatingRandom, setGeneratingRandom] = useState(false);
@@ -58,7 +61,7 @@ export function EmailGenerator({ onAliasCreated }: EmailGeneratorProps) {
     if (session) {
       setDuration(DURATION_OPTIONS[4].value); // Permanent for logged-in users
     } else {
-      setDuration(86400); // 24h for guests
+      setDuration(3600); // 1h for guests
     }
   }, [session]);
 
@@ -67,35 +70,59 @@ export function EmailGenerator({ onAliasCreated }: EmailGeneratorProps) {
     return generateEmailUsername();
   };
 
-  // Load domains from API for logged-in users
+  // Load domains from API (includes global domains for all users)
   useEffect(() => {
     // Generate initial random username
     setUsername(generateRandomUsername());
 
-    // Fetch domains for logged-in users only
-    if (session) {
-      const fetchDomains = async () => {
-        try {
-          const res = await fetch("/api/user/domains");
-          const data = await res.json();
-          if (data.domains) {
-            setSavedDomains(data.domains);
+    // Fetch domains (works for both logged-in and guest users)
+    const fetchDomains = async () => {
+      try {
+        const res = await fetch("/api/user/domains");
+        const data = await res.json();
+        if (data.domains && data.domains.length > 0) {
+          setSavedDomains(data.domains);
+
+          // Separate global and personal domains
+          const customDomainNames = (data.customDomains || []).map(
+            (d: any) => d.domain || d
+          );
+          const globalDomains = data.domains.filter(
+            (d: string) => !customDomainNames.includes(d)
+          );
+          setGlobalDomainsList(globalDomains);
+          setPersonalDomainsList(customDomainNames);
+
+          // For guests: randomly select a domain
+          // For logged-in users: use default domain
+          if (!session) {
+            const randomIndex = Math.floor(Math.random() * data.domains.length);
+            setDomain(data.domains[randomIndex]);
+          } else if (!data.domains.includes(domain)) {
+            // Use default domain if available, otherwise first domain
+            const defaultDomain = data.defaultDomain || data.domains[0];
+            setDomain(defaultDomain);
           }
-        } catch (error) {
-          console.error("Error fetching domains:", error);
         }
-      };
-      fetchDomains();
-    } else {
-      // Guest users only get default domain
-      setSavedDomains(DEFAULT_DOMAINS);
-    }
+      } catch (error) {
+        console.error("Error fetching domains:", error);
+        // Fallback to default domains
+        setSavedDomains(DEFAULT_DOMAINS);
+        setGlobalDomainsList(DEFAULT_DOMAINS);
+      }
+    };
+    fetchDomains();
   }, [session]);
 
   const handleRefreshUsername = () => {
     setGeneratingRandom(true);
     setTimeout(() => {
       setUsername(generateRandomUsername());
+      // Also randomize domain for guests
+      if (!session && savedDomains.length > 0) {
+        const randomIndex = Math.floor(Math.random() * savedDomains.length);
+        setDomain(savedDomains[randomIndex]);
+      }
       setGeneratingRandom(false);
     }, 300);
   };
@@ -203,6 +230,7 @@ export function EmailGenerator({ onAliasCreated }: EmailGeneratorProps) {
           body: JSON.stringify({
             email: email,
             recoveryKey: data.token,
+            isLoggedIn: !!session,
           }),
         });
         const verifyData = await verifyRes.json();
@@ -322,15 +350,18 @@ export function EmailGenerator({ onAliasCreated }: EmailGeneratorProps) {
                     emailType === "random" && "text-white"
                   )}
                 />
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                  <span className="text-sm text-muted-foreground">
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 max-w-[45%]">
+                  <span
+                    className="text-sm text-muted-foreground truncate"
+                    title={`@${domain}`}
+                  >
                     @{domain}
                   </span>
                   {emailType === "random" && (
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 hover:bg-white/10"
+                      className="h-8 w-8 hover:bg-white/10 flex-shrink-0"
                       onClick={handleRefreshUsername}
                       disabled={generatingRandom}
                     >
@@ -362,16 +393,33 @@ export function EmailGenerator({ onAliasCreated }: EmailGeneratorProps) {
                 <select
                   value={domain}
                   onChange={(e) => setDomain(e.target.value)}
-                  className="w-full h-12 px-4 pr-10 rounded-md bg-black/30 text-white/40 appearance-none focus:outline-none focus:ring-2 focus:ring-white/20"
+                  className="w-full h-12 px-4 pr-10 rounded-md bg-black/30 text-white appearance-none focus:outline-none focus:ring-2 focus:ring-white/20"
                 >
-                  {savedDomains.map((d) => (
-                    <option key={d} value={d} className="bg-black/30">
-                      {d}
-                    </option>
-                  ))}
+                  {globalDomainsList.length > 0 && (
+                    <optgroup label="🌐 Global Domains" className="bg-zinc-900">
+                      {globalDomainsList.map((d) => (
+                        <option key={d} value={d} className="bg-zinc-900">
+                          {d}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {personalDomainsList.length > 0 && (
+                    <optgroup label="👤 My Domains" className="bg-zinc-900">
+                      {personalDomainsList.map((d) => (
+                        <option key={d} value={d} className="bg-zinc-900">
+                          {d}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none" />
               </div>
+              <p className="text-xs text-muted-foreground">
+                Global domains are available to everyone. Add custom domains in
+                Dashboard.
+              </p>
             </div>
           )}
 
@@ -410,7 +458,7 @@ export function EmailGenerator({ onAliasCreated }: EmailGeneratorProps) {
               </div>
               <p className="text-xs text-muted-foreground">
                 Email expires in{" "}
-                <span className="text-white font-medium">24 hours</span>.
+                <span className="text-white font-medium">1 hour</span>.
                 <a
                   href="/auth/signin"
                   className="text-white underline hover:text-white/80 ml-1"

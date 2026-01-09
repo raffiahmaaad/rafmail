@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { InboxInterface } from "@/components/inbox-interface";
 import { MailboxVerifyModal } from "@/components/mailbox-verify-modal";
-import { Shield, User } from "lucide-react";
+import { Shield, User, Key } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "@/lib/auth-client";
 
@@ -163,14 +163,32 @@ export function MailboxPageClient({ username }: MailboxPageClientProps) {
             <span>RafMail</span>
           </Link>
 
-          <div className="flex items-center gap-2">
-            <Link
-              href="/dashboard"
-              className="text-sm text-muted-foreground hover:text-white transition-colors flex items-center gap-1"
-            >
-              <User className="h-4 w-4" />
-              <span className="hidden sm:inline">Dashboard</span>
-            </Link>
+          <div className="flex items-center gap-2 sm:gap-3">
+            {session ? (
+              <Link
+                href="/dashboard"
+                className="text-sm text-muted-foreground hover:text-white transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-white/5"
+              >
+                <User className="h-4 w-4" />
+                <span className="hidden sm:inline">Dashboard</span>
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/recover"
+                  className="text-sm text-muted-foreground hover:text-white transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-white/5"
+                >
+                  <Key className="h-4 w-4" />
+                  <span className="hidden sm:inline">Recover</span>
+                </Link>
+                <Link
+                  href="/auth/signin"
+                  className="text-sm bg-white text-black hover:bg-white/90 transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium"
+                >
+                  Sign In
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -184,7 +202,7 @@ export function MailboxPageClient({ username }: MailboxPageClientProps) {
       </div>
 
       <footer className="border-t border-white/5 py-6 text-center text-muted-foreground text-sm">
-        <p>© {new Date().getFullYear()} RafMail. Open Source.</p>
+        <p>© {new Date().getFullYear()} RafMail. By Leraie.</p>
       </footer>
     </main>
   );

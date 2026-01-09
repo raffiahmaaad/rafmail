@@ -39,6 +39,7 @@ export function MailboxVerifyModal({
         body: JSON.stringify({
           email: email,
           recoveryKey: recoveryKey.trim(),
+          isLoggedIn: !!session,
         }),
       });
 

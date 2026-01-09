@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { userDomains } from "@/lib/schema";
+import { userDomains, globalDomains } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 const DEFAULT_DOMAINS = ["rafxyz.web.id"];
 
 /**
- * GET: Fetch user's custom domains from PostgreSQL
+ * GET: Fetch user's custom domains + global domains from PostgreSQL
  */
 export async function GET() {
   try {
@@ -16,10 +16,32 @@ export async function GET() {
       headers: await headers(),
     });
 
+    // Fetch global domains (available to all users, even guests)
+    const globalDomainsList = await db
+      .select({ 
+        domain: globalDomains.domain,
+        isDefault: globalDomains.isDefault 
+      })
+      .from(globalDomains)
+      .where(eq(globalDomains.active, true));
+
+    const globalDomainNames = globalDomainsList.map((d) => d.domain);
+    
+    // Find the default domain
+    const defaultDomainObj = globalDomainsList.find((d) => d.isDefault);
+    const defaultDomain = defaultDomainObj?.domain || DEFAULT_DOMAINS[0];
+
+    // If not logged in, return default + global domains only
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      const allDomains = [...DEFAULT_DOMAINS, ...globalDomainNames];
+      return NextResponse.json({
+        domains: [...new Set(allDomains)], // deduplicate
+        customDomains: [],
+        defaultDomain,
+      });
     }
 
+    // Logged in: include user's custom domains
     const domains = await db
       .select({
         domain: userDomains.domain,
@@ -29,11 +51,12 @@ export async function GET() {
       .where(eq(userDomains.userId, session.user.id));
 
     const customDomains = domains.map((d) => d.domain);
-    const allDomains = [...DEFAULT_DOMAINS, ...customDomains];
+    const allDomains = [...DEFAULT_DOMAINS, ...globalDomainNames, ...customDomains];
 
     return NextResponse.json({
-      domains: allDomains,
+      domains: [...new Set(allDomains)], // deduplicate
       customDomains: domains,
+      defaultDomain,
     });
   } catch (error) {
     console.error("Error fetching domains:", error);

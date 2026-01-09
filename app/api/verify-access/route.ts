@@ -2,13 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { redis } from "@/lib/redis";
 import crypto from "crypto";
 
-// Session duration: 1 day
-const SESSION_TTL = 24 * 60 * 60; // 1 day in seconds
+// Session duration: 
+// - Guests: 1 hour
+// - Logged-in: Permanent (no TTL)
+const GUEST_SESSION_TTL = 3600; // 1 hour in seconds
 
 // POST - Verify recovery key and create session
 export async function POST(request: NextRequest) {
   try {
-    const { email, recoveryKey } = await request.json();
+    const { email, recoveryKey, isLoggedIn } = await request.json();
 
     if (!email || !recoveryKey) {
       return NextResponse.json(
@@ -51,21 +53,28 @@ export async function POST(request: NextRequest) {
     // Generate session token
     const sessionToken = crypto.randomBytes(32).toString("base64url");
 
-    // Store session in Redis with 1 day TTL
+    // Store session in Redis
+    // - Logged-in users: permanent (no TTL)
+    // - Guests: 1 hour TTL
     const sessionKey = `mailbox-session:${sessionToken}`;
     await redis.set(sessionKey, normalizedEmail);
-    await redis.expire(sessionKey, SESSION_TTL);
-
-    // Also store a reverse lookup: email -> session (for invalidation if needed)
+    
     const emailSessionKey = `email-session:${normalizedEmail}`;
     await redis.set(emailSessionKey, sessionToken);
-    await redis.expire(emailSessionKey, SESSION_TTL);
+
+    if (!isLoggedIn) {
+      // Only set TTL for guests
+      await redis.expire(sessionKey, GUEST_SESSION_TTL);
+      await redis.expire(emailSessionKey, GUEST_SESSION_TTL);
+    }
+    // For logged-in users, no expire = permanent
 
     return NextResponse.json({
       success: true,
       sessionToken,
       email: normalizedEmail,
-      expiresIn: SESSION_TTL,
+      expiresIn: isLoggedIn ? -1 : GUEST_SESSION_TTL, // -1 = permanent
+      isPermanent: !!isLoggedIn,
     });
   } catch (error) {
     console.error("Verify access error:", error);

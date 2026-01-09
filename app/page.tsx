@@ -68,7 +68,7 @@ export default function Home() {
       </div>
 
       <footer className="border-t border-white/5 py-6 text-center text-muted-foreground text-sm">
-        <p>© {new Date().getFullYear()} RafMail. Open Source.</p>
+        <p>© {new Date().getFullYear()} RafMail. By Leraie.</p>
       </footer>
 
       {/* Recovery Modal */}

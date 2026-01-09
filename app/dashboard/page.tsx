@@ -384,7 +384,7 @@ export default function DashboardPage() {
                         {item.email}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex items-center flex-shrink-0">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -394,8 +394,7 @@ export default function DashboardPage() {
                         }}
                         className="h-8 text-muted-foreground hover:text-white hover:bg-white/5"
                       >
-                        <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                        Open
+                        <ExternalLink className="h-3.5 w-3.5" />
                       </Button>
                       <Button
                         variant="ghost"
@@ -471,8 +470,9 @@ export default function DashboardPage() {
 
         {/* Custom Domains Section */}
         <div className="glass-card rounded-xl sm:rounded-2xl p-6 sm:p-8 space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <h2 className="text-lg font-semibold flex items-center gap-2 text-white">
+              <Globe className="h-5 w-5 text-muted-foreground" />
               Custom Domains
             </h2>
             <button
@@ -480,7 +480,8 @@ export default function DashboardPage() {
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-white transition-colors"
             >
               <HelpCircle className="h-4 w-4" />
-              How to add domain
+              <span className="hidden sm:inline">How to add domain</span>
+              <span className="sm:hidden">Tutorial</span>
               {showTutorial ? (
                 <ChevronUp className="h-3 w-3" />
               ) : (
@@ -489,222 +490,32 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          {/* Tutorial Section */}
-          <AnimatePresence>
-            {showTutorial && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="bg-black/30 rounded-xl p-5 border border-white/5 space-y-4">
-                  <h4 className="font-semibold text-white flex items-center gap-2">
-                    <Info className="h-5 w-5 text-blue-400" />
-                    How to Add Your Custom Domain
-                  </h4>
-                  <div className="space-y-4 text-sm text-muted-foreground">
-                    {/* Step 1 - DNS Configuration */}
-                    <div className="flex gap-3">
-                      <span className="h-6 w-6 rounded-full bg-blue-500/20 flex items-center justify-center text-xs text-blue-400 flex-shrink-0 font-bold">
-                        1
-                      </span>
-                      <div className="space-y-2">
-                        <p className="text-white font-medium flex items-center gap-2">
-                          <Globe className="h-4 w-4 text-blue-400" />
-                          Configure DNS Records (MX)
-                        </p>
-                        <p>
-                          Go to your domain&apos;s DNS settings and add the
-                          following MX records for Cloudflare Email Routing:
-                        </p>
-                        <div className="bg-black/40 rounded-lg p-3 space-y-1 mt-2">
-                          <div className="flex items-center justify-between text-xs">
-                            <code className="text-green-400">
-                              MX @ route1.mx.cloudflare.net
-                            </code>
-                            <span className="text-muted-foreground">
-                              Priority: 8
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between text-xs">
-                            <code className="text-green-400">
-                              MX @ route2.mx.cloudflare.net
-                            </code>
-                            <span className="text-muted-foreground">
-                              Priority: 49
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between text-xs">
-                            <code className="text-green-400">
-                              MX @ route3.mx.cloudflare.net
-                            </code>
-                            <span className="text-muted-foreground">
-                              Priority: 4
-                            </span>
-                          </div>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Replace <code className="text-white/80">@</code> with
-                          your domain root (e.g.,{" "}
-                          <code className="text-white/80">yourdomain.com</code>)
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Step 2 - Email Forwarding */}
-                    <div className="flex gap-3">
-                      <span className="h-6 w-6 rounded-full bg-purple-500/20 flex items-center justify-center text-xs text-purple-400 flex-shrink-0 font-bold">
-                        2
-                      </span>
-                      <div className="space-y-2">
-                        <p className="text-white font-medium flex items-center gap-2">
-                          <ArrowRight className="h-4 w-4 text-purple-400" />
-                          Set Up Email Forwarding (Catch-All)
-                        </p>
-                        <p>
-                          In Cloudflare Dashboard, go to{" "}
-                          <strong className="text-white">Email Routing</strong>{" "}
-                          →{" "}
-                          <strong className="text-white">Routing Rules</strong>{" "}
-                          and create a{" "}
-                          <strong className="text-white">
-                            &quot;Catch-all&quot;
-                          </strong>{" "}
-                          rule:
-                        </p>
-                        <div className="bg-black/40 rounded-lg p-3 space-y-2 mt-2">
-                          <div className="text-xs">
-                            <span className="text-muted-foreground">
-                              Action:
-                            </span>
-                            <span className="ml-2 text-amber-400">
-                              Send to Worker
-                            </span>
-                          </div>
-                          <div className="text-xs">
-                            <span className="text-muted-foreground">
-                              Destination:
-                            </span>
-                            <code className="ml-2 text-white/80 break-all">
-                              email-worker (Cloudflare Email Worker)
-                            </code>
-                          </div>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-2">
-                          The worker will forward emails to:
-                        </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <code className="bg-black/40 px-3 py-2 rounded text-xs text-green-400 break-all flex-1">
-                            POST https://rafmail.web.id/api/webhook
-                          </code>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 flex-shrink-0 hover:bg-white/5"
-                            onClick={() =>
-                              copyToClipboard(
-                                "https://rafmail.web.id/api/webhook",
-                                "Webhook URL"
-                              )
-                            }
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Step 3 - Verify Domain */}
-                    <div className="flex gap-3">
-                      <span className="h-6 w-6 rounded-full bg-green-500/20 flex items-center justify-center text-xs text-green-400 flex-shrink-0 font-bold">
-                        3
-                      </span>
-                      <div className="space-y-2">
-                        <p className="text-white font-medium flex items-center gap-2">
-                          <Shield className="h-4 w-4 text-green-400" />
-                          Verify Domain Configuration
-                        </p>
-                        <p>
-                          Use the{" "}
-                          <strong className="text-white">
-                            &quot;Verify&quot;
-                          </strong>{" "}
-                          button below to check if your domain&apos;s MX records
-                          are properly configured. This will verify that emails
-                          will be routed correctly.
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Step 4 - Add Domain */}
-                    <div className="flex gap-3">
-                      <span className="h-6 w-6 rounded-full bg-amber-500/20 flex items-center justify-center text-xs text-amber-400 flex-shrink-0 font-bold">
-                        4
-                      </span>
-                      <div className="space-y-2">
-                        <p className="text-white font-medium flex items-center gap-2">
-                          <Plus className="h-4 w-4 text-amber-400" />
-                          Add Your Domain
-                        </p>
-                        <p>
-                          Once verified, add your domain below. It will appear
-                          as an option when creating new email aliases on the
-                          homepage.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Important Notes */}
-                  <div className="space-y-2 mt-4">
-                    <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                      <AlertTriangle className="h-4 w-4 text-amber-400 flex-shrink-0 mt-0.5" />
-                      <p className="text-xs text-amber-400/90">
-                        <strong>Note:</strong> DNS changes can take up to 48
-                        hours to propagate. If verification fails, please wait
-                        and try again later.
-                      </p>
-                    </div>
-                    <div className="flex items-start gap-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                      <Info className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
-                      <p className="text-xs text-blue-400/90">
-                        <strong>Tip:</strong> Make sure you&apos;ve enabled
-                        Email Routing for your domain in Cloudflare before
-                        adding MX records.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          
 
           {/* Add Domain Form */}
           <form onSubmit={handleAddDomain} className="space-y-3">
+            <Input
+              placeholder="Enter your domain (e.g. mydomain.com)"
+              value={newDomain}
+              onChange={(e) => {
+                setNewDomain(e.target.value);
+                setDomainStatus(null);
+              }}
+              className="bg-black/30 border-white/10 focus-visible:ring-white/20 h-11"
+            />
             <div className="flex gap-2">
-              <Input
-                placeholder="Enter your domain (e.g. mydomain.com)"
-                value={newDomain}
-                onChange={(e) => {
-                  setNewDomain(e.target.value);
-                  setDomainStatus(null);
-                }}
-                className="bg-black/30 border-white/10 focus-visible:ring-white/20"
-              />
               <Button
                 type="button"
                 variant="outline"
                 disabled={!newDomain.trim() || verifyingDomain}
                 onClick={() => verifyDomain(newDomain)}
-                className="shrink-0 border-white/10 hover:bg-white/5"
+                className="flex-1 sm:flex-none border-white/10 hover:bg-white/5 h-10"
               >
                 {verifyingDomain ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <>
-                    <Shield className="h-4 w-4 mr-1" />
+                    <Shield className="h-4 w-4 mr-1.5" />
                     Verify
                   </>
                 )}
@@ -712,13 +523,13 @@ export default function DashboardPage() {
               <Button
                 type="submit"
                 disabled={!newDomain.trim() || addingDomain}
-                className="shrink-0 bg-white hover:bg-white/90 text-black"
+                className="flex-1 sm:flex-none bg-white hover:bg-white/90 text-black h-10"
               >
                 {addingDomain ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <>
-                    <Plus className="h-4 w-4 mr-1" />
+                    <Plus className="h-4 w-4 mr-1.5" />
                     Add
                   </>
                 )}
@@ -728,19 +539,14 @@ export default function DashboardPage() {
             {/* Verification Status */}
             {domainStatus && (
               <div
-                className={`p-3 rounded-lg border ${
+                className={`p-4 rounded-xl border ${
                   domainStatus.verified
                     ? "bg-green-500/10 border-green-500/20"
                     : "bg-red-500/10 border-red-500/20"
                 }`}
               >
-                <div className="flex items-start gap-2">
-                  {domainStatus.verified ? (
-                    <CheckCircle2 className="h-4 w-4 text-green-400 flex-shrink-0 mt-0.5" />
-                  ) : (
-                    <XCircle className="h-4 w-4 text-red-400 flex-shrink-0 mt-0.5" />
-                  )}
-                  <div className="flex-1 space-y-1">
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 min-w-0 space-y-2">
                     <p
                       className={`text-sm font-medium ${domainStatus.verified ? "text-green-400" : "text-red-400"}`}
                     >
@@ -748,21 +554,21 @@ export default function DashboardPage() {
                         ? "Domain Verified ✓"
                         : "Verification Failed"}
                     </p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground break-words">
                       {domainStatus.message || domainStatus.error}
                     </p>
                     {domainStatus.mxRecords &&
                       domainStatus.mxRecords.length > 0 && (
-                        <div className="mt-2">
-                          <p className="text-xs text-muted-foreground mb-1">
+                        <div className="mt-3">
+                          <p className="text-xs text-muted-foreground mb-2">
                             MX Records found:
                           </p>
-                          <div className="bg-black/30 rounded p-2 space-y-1">
+                          <div className="bg-black/30 rounded-lg p-3 space-y-1.5 overflow-x-auto">
                             {domainStatus.mxRecords.map(
                               (record: string, i: number) => (
                                 <code
                                   key={i}
-                                  className="block text-xs text-white/70"
+                                  className="block text-[11px] sm:text-xs text-white/70 whitespace-nowrap"
                                 >
                                   {record}
                                 </code>
@@ -850,22 +656,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Quick Actions */}
-        <div className="glass-card rounded-xl sm:rounded-2xl p-6 sm:p-8">
-          <h3 className="text-sm font-medium text-muted-foreground mb-4">
-            Quick Actions
-          </h3>
-          <div className="flex flex-wrap gap-3">
-            <Link href="/">
-              <Button
-                variant="outline"
-                className="border-white/10 hover:bg-white/5 hover:border-white/20"
-              >
-                Create New Email
-              </Button>
-            </Link>
-          </div>
-        </div>
+
       </div>
 
       {/* Delete Confirmation Dialog */}

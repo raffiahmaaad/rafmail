@@ -184,7 +184,7 @@ export function InboxInterface({
   const [history, setHistory] = useState<string[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [isAddDomainOpen, setIsAddDomainOpen] = useState(false);
-  const [retention, setRetention] = useState<number>(86400);
+  const [retention, setRetention] = useState<number>(3600);
   const [recoveryToken, setRecoveryToken] = useState<string>("");
   const [showRecoveryToken, setShowRecoveryToken] = useState(false);
   const [viewingRecoveryKey, setViewingRecoveryKey] = useState<string | null>(
@@ -428,6 +428,7 @@ export function InboxInterface({
             body: JSON.stringify({
               email: newAddress,
               recoveryKey: data.token,
+              isLoggedIn: !!session,
             }),
           });
           const verifyData = await verifyRes.json();
@@ -599,7 +600,7 @@ export function InboxInterface({
               Waiting for emails at this address. Messages auto-delete after{" "}
               <span className="text-white font-medium">
                 {RETENTION_OPTIONS.find((o) => o.value === retention)?.label ||
-                  "24 Hours"}
+                  "1 Hour"}
               </span>
               .
             </p>
@@ -618,27 +619,21 @@ export function InboxInterface({
 
         <div className="flex flex-col gap-4">
           {/* Email Input Row with Buttons */}
-          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-            {/* Email Address Display - Read Only */}
-            <div className="flex-1 min-w-[200px] h-12 px-4 flex items-center rounded-md border border-white/10 bg-black/20">
-              <span className="font-medium   text-sm sm:text-base text-white truncate">
+          <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-2">
+            {/* Email Address Display - Click to Copy */}
+            <div
+              onClick={copyAddress}
+              className="w-full sm:flex-1 h-12 px-4 flex items-center justify-between rounded-md border border-white/10 bg-black/20 cursor-pointer hover:bg-white/5 hover:border-white/20 transition-colors group"
+              title="Click to copy"
+            >
+              <span className="font-medium text-sm sm:text-base text-white truncate">
                 {address}
               </span>
+              <Copy className="h-4 w-4 text-muted-foreground group-hover:text-white transition-colors flex-shrink-0 ml-2" />
             </div>
 
-            {/* Action Buttons - inline with input */}
-            <div className="flex gap-2 items-center flex-shrink-0">
-              {/* Copy Button */}
-              <Button
-                onClick={copyAddress}
-                variant="ghost"
-                size="icon"
-                className="h-10 w-10 sm:h-12 sm:w-12 border border-white/10 hover:bg-white/5"
-                title="Copy Address"
-              >
-                <Copy className="h-4 w-4 sm:h-5 sm:w-5" />
-              </Button>
-
+            {/* Action Buttons - centered on mobile, inline on desktop */}
+            <div className="flex gap-2 items-center justify-center flex-shrink-0">
               {/* Settings Button - Premium feature for logged-in users only */}
               {session && (
                 <Button
@@ -663,115 +658,117 @@ export function InboxInterface({
                 <Key className="h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
 
-              {/* History Button */}
-              <div className="relative">
-                <Button
-                  onClick={() => setShowHistory(!showHistory)}
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "h-10 w-10 sm:h-12 sm:w-12 border border-white/10 hover:bg-white/5 relative",
-                    showHistory && "bg-white/10 ring-2 ring-white/10"
-                  )}
-                  title="History"
-                >
-                  <History className="h-4 w-4 sm:h-5 sm:w-5" />
-                  {history.length > 0 && (
-                    <span className="absolute top-2 right-1 h-2 w-2 bg-blue-500 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
-                  )}
-                </Button>
+              {/* History Button - Only for logged-in users */}
+              {session && (
+                <div className="relative">
+                  <Button
+                    onClick={() => setShowHistory(!showHistory)}
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      "h-10 w-10 sm:h-12 sm:w-12 border border-white/10 hover:bg-white/5 relative",
+                      showHistory && "bg-white/10 ring-2 ring-white/10"
+                    )}
+                    title="History"
+                  >
+                    <History className="h-4 w-4 sm:h-5 sm:w-5" />
+                    {history.length > 0 && (
+                      <span className="absolute top-2 right-1 h-2 w-2 bg-blue-500 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
+                    )}
+                  </Button>
 
-                <AnimatePresence>
-                  {showHistory && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-40"
-                        onClick={() => setShowHistory(false)}
-                      />
-                      <motion.div
-                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        className="absolute right-0 top-14 w-80 rounded-xl p-0 z-50 border border-white/10 shadow-2xl overflow-hidden bg-zinc-900"
-                      >
-                        <div className="flex justify-between items-center px-4 py-3 border-b border-white/10 bg-zinc-800/50">
-                          <span className="text-xs font-bold tracking-wider uppercase text-muted-foreground">
-                            History
-                          </span>
-                          {history.length > 0 && (
-                            <button
-                              onClick={() => {
-                                setHistory([]);
-                                localStorage.removeItem("dispo_history");
-                              }}
-                              className="text-[10px] uppercase font-bold text-red-400 hover:text-red-300 transition-colors"
-                            >
-                              Clear All
-                            </button>
-                          )}
-                        </div>
-                        <div className="max-h-72 overflow-y-auto custom-scrollbar p-2 space-y-1">
-                          {history.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground space-y-2">
-                              <History className="h-8 w-8 opacity-20" />
-                              <p className="text-sm">No recent addresses</p>
-                            </div>
-                          ) : (
-                            history.map((histAddr) => (
-                              <div
-                                key={histAddr}
-                                className="flex group items-center gap-3 p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer border border-transparent hover:border-white/5"
+                  <AnimatePresence>
+                    {showHistory && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={() => setShowHistory(false)}
+                        />
+                        <motion.div
+                          initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                          className="absolute right-0 top-14 w-80 rounded-xl p-0 z-50 border border-white/10 shadow-2xl overflow-hidden bg-zinc-900"
+                        >
+                          <div className="flex justify-between items-center px-4 py-3 border-b border-white/10 bg-zinc-800/50">
+                            <span className="text-xs font-bold tracking-wider uppercase text-muted-foreground">
+                              History
+                            </span>
+                            {history.length > 0 && (
+                              <button
+                                onClick={() => {
+                                  setHistory([]);
+                                  localStorage.removeItem("dispo_history");
+                                }}
+                                className="text-[10px] uppercase font-bold text-red-400 hover:text-red-300 transition-colors"
                               >
-                                <div
-                                  className="flex-1 min-w-0"
-                                  onClick={() => {
-                                    setAddress(histAddr);
-                                    const parts = histAddr.split("@");
-                                    if (parts[1]) setDomain(parts[1]);
-                                    localStorage.setItem(
-                                      "dispo_address",
-                                      histAddr
-                                    );
-                                    setShowHistory(false);
-                                  }}
-                                >
-                                  <p className="font-mono text-sm truncate text-gray-200">
-                                    {histAddr}
-                                  </p>
-                                  <p className="textxs text-muted-foreground truncate opacity-50 text-[10px]">
-                                    {emails.length > 0 && address === histAddr
-                                      ? "Active"
-                                      : "Click to restore"}
-                                  </p>
-                                </div>
-
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/20 hover:text-red-400"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const newHist = history.filter(
-                                      (h) => h !== histAddr
-                                    );
-                                    setHistory(newHist);
-                                    localStorage.setItem(
-                                      "dispo_history",
-                                      JSON.stringify(newHist)
-                                    );
-                                  }}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
+                                Clear All
+                              </button>
+                            )}
+                          </div>
+                          <div className="max-h-72 overflow-y-auto custom-scrollbar p-2 space-y-1">
+                            {history.length === 0 ? (
+                              <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground space-y-2">
+                                <History className="h-8 w-8 opacity-20" />
+                                <p className="text-sm">No recent addresses</p>
                               </div>
-                            ))
-                          )}
-                        </div>
-                      </motion.div>
-                    </>
-                  )}
-                </AnimatePresence>
-              </div>
+                            ) : (
+                              history.map((histAddr) => (
+                                <div
+                                  key={histAddr}
+                                  className="flex group items-center gap-3 p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer border border-transparent hover:border-white/5"
+                                >
+                                  <div
+                                    className="flex-1 min-w-0"
+                                    onClick={() => {
+                                      setAddress(histAddr);
+                                      const parts = histAddr.split("@");
+                                      if (parts[1]) setDomain(parts[1]);
+                                      localStorage.setItem(
+                                        "dispo_address",
+                                        histAddr
+                                      );
+                                      setShowHistory(false);
+                                    }}
+                                  >
+                                    <p className="font-mono text-sm truncate text-gray-200">
+                                      {histAddr}
+                                    </p>
+                                    <p className="textxs text-muted-foreground truncate opacity-50 text-[10px]">
+                                      {emails.length > 0 && address === histAddr
+                                        ? "Active"
+                                        : "Click to restore"}
+                                    </p>
+                                  </div>
+
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/20 hover:text-red-400"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const newHist = history.filter(
+                                        (h) => h !== histAddr
+                                      );
+                                      setHistory(newHist);
+                                      localStorage.setItem(
+                                        "dispo_history",
+                                        JSON.stringify(newHist)
+                                      );
+                                    }}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
 
               {/* Create New Address Button */}
               <Button

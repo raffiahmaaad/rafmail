@@ -14,6 +14,7 @@ interface SettingsDialogProps {
 }
 
 export const RETENTION_OPTIONS = [
+  { label: "1 Hour", value: 3600 },
   { label: "1 Day", value: 86400 },
   { label: "1 Week", value: 604800 },
   { label: "1 Month", value: 2592000 },

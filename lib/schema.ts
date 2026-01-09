@@ -19,6 +19,7 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("emailVerified").notNull(),
   image: text("image"),
+  isAdmin: boolean("is_admin").default(false), // Custom field for admin access
   createdAt: timestamp("createdAt").notNull(),
   updatedAt: timestamp("updatedAt").notNull(),
 });
@@ -142,6 +143,30 @@ export const userPreferences = pgTable("user_preferences", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+/**
+ * Global Domains
+ * System-wide domains available for all users (managed by admin)
+ */
+export const globalDomains = pgTable("global_domains", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  domain: text("domain").notNull().unique(),
+  active: boolean("active").default(true),
+  isDefault: boolean("is_default").default(false), // Only one domain can be default
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+/**
+ * Admin Sessions
+ * Stores verified admin sessions (after master key verification)
+ */
+export const adminSessions = pgTable("admin_sessions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull(),
+  sessionToken: text("session_token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Type exports for use in API routes
 export type UserAddress = typeof userAddresses.$inferSelect;
 export type NewUserAddress = typeof userAddresses.$inferInsert;
@@ -153,3 +178,7 @@ export type UserDomain = typeof userDomains.$inferSelect;
 export type NewUserDomain = typeof userDomains.$inferInsert;
 export type UserPreference = typeof userPreferences.$inferSelect;
 export type NewUserPreference = typeof userPreferences.$inferInsert;
+export type GlobalDomain = typeof globalDomains.$inferSelect;
+export type NewGlobalDomain = typeof globalDomains.$inferInsert;
+export type AdminSession = typeof adminSessions.$inferSelect;
+export type NewAdminSession = typeof adminSessions.$inferInsert;

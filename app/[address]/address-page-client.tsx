@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { InboxInterface } from "@/components/inbox-interface";
 import { MailboxVerifyModal } from "@/components/mailbox-verify-modal";
-import { Shield, Zap, Globe } from "lucide-react";
+import { Shield, Zap, Globe, Key } from "lucide-react";
+import { useSession } from "@/lib/auth-client";
 
 interface AddressPageClientProps {
   address: string;
@@ -12,17 +13,46 @@ interface AddressPageClientProps {
 
 export function AddressPageClient({ address }: AddressPageClientProps) {
   const router = useRouter();
+  const { data: session, isPending } = useSession();
   const [isVerified, setIsVerified] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const hasChecked = useRef(false);
 
-  // Check for existing valid session
+  // Check for existing valid session or user ownership
   useEffect(() => {
+    // Wait for session loading to complete
+    if (isPending) return;
+
+    // Prevent duplicate runs
+    if (hasChecked.current) return;
+    hasChecked.current = true;
+
     const checkSession = async () => {
       setIsChecking(true);
 
       try {
-        // Check localStorage first
+        // If user is logged in, check if this email belongs to them
+        if (session?.user?.id) {
+          const userEmailsRes = await fetch("/api/user/emails");
+          const userEmailsData = await userEmailsRes.json();
+          const userEmails = userEmailsData.emails || [];
+
+          // Check if this address belongs to the logged-in user
+          const ownsEmail = userEmails.some(
+            (e: { email: string }) =>
+              e.email.toLowerCase() === address.toLowerCase()
+          );
+
+          if (ownsEmail) {
+            // User owns this email, auto-verify without needing recovery key
+            setIsVerified(true);
+            setIsChecking(false);
+            return;
+          }
+        }
+
+        // Check localStorage for existing session
         const sessions = JSON.parse(
           localStorage.getItem("mailbox_sessions") || "{}"
         );
@@ -57,7 +87,7 @@ export function AddressPageClient({ address }: AddressPageClientProps) {
     };
 
     checkSession();
-  }, [address]);
+  }, [address, isPending, session?.user?.id]);
 
   const handleVerified = (token: string) => {
     setSessionToken(token);
@@ -115,6 +145,34 @@ export function AddressPageClient({ address }: AddressPageClientProps) {
           >
             <span>RafMail</span>
           </a>
+
+          <div className="flex items-center gap-2 sm:gap-3">
+            {session ? (
+              <a
+                href="/dashboard"
+                className="text-sm text-muted-foreground hover:text-white transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-white/5"
+              >
+                <Globe className="h-4 w-4" />
+                <span className="hidden sm:inline">Dashboard</span>
+              </a>
+            ) : (
+              <>
+                <a
+                  href="/recover"
+                  className="text-sm text-muted-foreground hover:text-white transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-white/5"
+                >
+                  <Key className="h-4 w-4" />
+                  <span className="hidden sm:inline">Recover</span>
+                </a>
+                <a
+                  href="/auth/signin"
+                  className="text-sm bg-white text-black hover:bg-white/90 transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium"
+                >
+                  Sign In
+                </a>
+              </>
+            )}
+          </div>
         </div>
       </header>
 
@@ -134,7 +192,7 @@ export function AddressPageClient({ address }: AddressPageClientProps) {
       </div>
 
       <footer className="border-t border-white/5 py-8 mt-12 text-center text-muted-foreground text-sm">
-        <p>© {new Date().getFullYear()} VaultMail. Open Source.</p>
+        <p>© {new Date().getFullYear()} VaultMail. By Leraie.</p>
       </footer>
     </main>
   );

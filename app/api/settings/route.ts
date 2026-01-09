@@ -11,7 +11,7 @@ export async function POST(req: Request) {
 
     // RETENTION POLICY:
     // - Logged-in users: can choose any retention (default: permanent = -1)
-    // - Guests: always 24 hours (86400), cannot be overridden
+    // - Guests: always 1 hour (3600), cannot be overridden
     let finalRetention: number;
     
     if (isLoggedIn) {
@@ -19,8 +19,8 @@ export async function POST(req: Request) {
       // If not specified, default to permanent (-1)
       finalRetention = retentionSeconds !== undefined ? parseInt(retentionSeconds) : -1;
     } else {
-      // Guests are always locked to 24 hours
-      finalRetention = 86400;
+      // Guests are always locked to 1 hour
+      finalRetention = 3600;
     }
 
     const settingsKey = `settings:${address.toLowerCase()}`;
@@ -33,9 +33,9 @@ export async function POST(req: Request) {
 
     // Settings TTL:
     // - Logged in: permanent (no TTL) 
-    // - Guest: 24 hours (same as email expiry)
+    // - Guest: 1 hour (same as email expiry)
     if (!isLoggedIn) {
-      await redis.expire(settingsKey, 86400); // 24 hours for guests
+      await redis.expire(settingsKey, 3600); // 1 hour for guests
     }
     // For logged-in users, no expire on settings
 

@@ -17,9 +17,9 @@ export async function POST(request: NextRequest) {
     
     // TTL based on login status:
     // - Logged in: No TTL (permanent)
-    // - Guest: 24 hours (86400 seconds)
-    const ttl = isLoggedIn ? null : 86400;
-    const expiresInLabel = isLoggedIn ? "Never (permanent)" : "24 hours";
+    // - Guest: 1 hour (3600 seconds)
+    const ttl = isLoggedIn ? null : 3600;
+    const expiresInLabel = isLoggedIn ? "Never (permanent)" : "1 hour";
     
     // Store in Redis
     const tokenKey = `recovery:${tokenId}`;

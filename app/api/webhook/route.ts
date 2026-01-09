@@ -55,8 +55,8 @@ export async function POST(req: Request) {
     
     // RETENTION POLICY:
     // - Logged-in users: use their saved retention preference (default: permanent = -1)
-    // - Guests: always 24h (86400 seconds)
-    let retention = 86400; // Default 24h (guest mode)
+    // - Guests: always 1h (3600 seconds)
+    let retention = 3600; // Default 1h (guest mode)
     let isLoggedIn = false;
 
     if (settingsRaw) {
@@ -69,8 +69,8 @@ export async function POST(req: Request) {
             // Logged-in users: use their chosen retention (or default -1 if not set)
             retention = s.retentionSeconds !== undefined ? s.retentionSeconds : -1;
           } else {
-            // Guests: always 24h, cannot override
-            retention = 86400;
+            // Guests: always 1h, cannot override
+            retention = 3600;
           }
         } else if (typeof settingsRaw === 'object') {
           // Upstash REST client might return object directly if auto-deserializing
@@ -79,7 +79,7 @@ export async function POST(req: Request) {
           if (isLoggedIn) {
             retention = s.retentionSeconds !== undefined ? s.retentionSeconds : -1;
           } else {
-            retention = 86400;
+            retention = 3600;
           }
         }
       } catch (e) {
@@ -93,7 +93,7 @@ export async function POST(req: Request) {
     
     // Set expiry based on retention setting
     // - Logged-in: permanent (retention = -1), no TTL
-    // - Guest: 24 hours (retention = 86400)
+    // - Guest: 1 hour (retention = 3600)
     if (retention !== -1) {
       await redis.expire(key, retention);
     }
