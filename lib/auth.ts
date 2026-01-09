@@ -1,13 +1,13 @@
 import { betterAuth } from "better-auth";
-import { Pool } from "pg";
-
-// Supabase PostgreSQL connection
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { db } from "./db";
+import * as schema from "./schema";
 
 export const auth = betterAuth({
-  database: pool,
+  database: drizzleAdapter(db, {
+    provider: "pg",
+    schema: schema,
+  }),
   trustedOrigins: [
     "http://localhost:3000",
     "https://rafmail.vercel.app",
