@@ -53,7 +53,9 @@ export async function POST(req: Request) {
     const settingsKey = `settings:${normalizedEmail}`;
     const settingsRaw = await redis.get(settingsKey);
     
-    // Default: 24h for unknown/guest, permanent for logged-in
+    // RETENTION POLICY:
+    // - Logged-in users: use their saved retention preference (default: permanent = -1)
+    // - Guests: always 24h (86400 seconds)
     let retention = 86400; // Default 24h (guest mode)
     let isLoggedIn = false;
 
@@ -62,13 +64,23 @@ export async function POST(req: Request) {
         // If stored as JSON string
         if (typeof settingsRaw === 'string') {
           const s = JSON.parse(settingsRaw);
-          if (s.retentionSeconds !== undefined) retention = s.retentionSeconds;
           if (s.isLoggedIn !== undefined) isLoggedIn = s.isLoggedIn;
+          if (isLoggedIn) {
+            // Logged-in users: use their chosen retention (or default -1 if not set)
+            retention = s.retentionSeconds !== undefined ? s.retentionSeconds : -1;
+          } else {
+            // Guests: always 24h, cannot override
+            retention = 86400;
+          }
         } else if (typeof settingsRaw === 'object') {
           // Upstash REST client might return object directly if auto-deserializing
           const s = settingsRaw as any;
-          if (s.retentionSeconds !== undefined) retention = s.retentionSeconds;
           if (s.isLoggedIn !== undefined) isLoggedIn = s.isLoggedIn;
+          if (isLoggedIn) {
+            retention = s.retentionSeconds !== undefined ? s.retentionSeconds : -1;
+          } else {
+            retention = 86400;
+          }
         }
       } catch (e) {
         console.error("Failed to parse settings", e);
@@ -80,12 +92,12 @@ export async function POST(req: Request) {
     await redis.lpush(key, emailData);
     
     // Set expiry based on retention setting
-    // Note: expire only works on the key, so it refreshes the whole list TTL.
-    // If retention is -1 (Forever) OR user is logged in with permanent default, don't set expiry
+    // - Logged-in: permanent (retention = -1), no TTL
+    // - Guest: 24 hours (retention = 86400)
     if (retention !== -1) {
       await redis.expire(key, retention);
     }
-    // If retention is -1 (permanent), no TTL is set
+    // If retention is -1 (permanent for logged-in), no TTL is set
 
     // Publish realtime notification via Ably
     try {

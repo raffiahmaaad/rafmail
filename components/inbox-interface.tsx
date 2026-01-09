@@ -47,40 +47,95 @@ import { SettingsDialog, RETENTION_OPTIONS } from "./settings-dialog";
 const formatSenderName = (from: string): string => {
   if (!from) return "Unknown";
 
-  // Handle "Name <email@domain.com>" format
+  // Extract email part first for domain checking
+  let email = from;
+  const emailMatch = from.match(/<(.+)>/);
+  if (emailMatch) {
+    email = emailMatch[1];
+  }
+
+  // Known brand domains - map domain to display name
+  const knownBrands: Record<string, string> = {
+    "openai.com": "OpenAI",
+    "google.com": "Google",
+    "microsoft.com": "Microsoft",
+    "github.com": "GitHub",
+    "apple.com": "Apple",
+    "facebook.com": "Facebook",
+    "meta.com": "Meta",
+    "twitter.com": "Twitter",
+    "x.com": "X",
+    "linkedin.com": "LinkedIn",
+    "amazon.com": "Amazon",
+    "netflix.com": "Netflix",
+    "spotify.com": "Spotify",
+    "discord.com": "Discord",
+    "slack.com": "Slack",
+    "notion.so": "Notion",
+    "figma.com": "Figma",
+    "vercel.com": "Vercel",
+    "stripe.com": "Stripe",
+    "paypal.com": "PayPal",
+    "sendgrid.net": "SendGrid",
+    "mailchimp.com": "Mailchimp",
+    "prompthero.com": "PromptHero",
+  };
+
+  // Check if email domain matches known brands (including subdomains)
+  const atIndex = email.lastIndexOf("@");
+  if (atIndex !== -1) {
+    const domain = email.substring(atIndex + 1).toLowerCase();
+    // Check exact match or subdomain match (e.g., tm1.openai.com matches openai.com)
+    for (const [brandDomain, brandName] of Object.entries(knownBrands)) {
+      if (domain === brandDomain || domain.endsWith("." + brandDomain)) {
+        return brandName;
+      }
+    }
+  }
+
+  // Handle "Name <email@domain.com>" format - use name if it looks like a real name
   const nameMatch = from.match(/^([^<]+)</);
   if (nameMatch && nameMatch[1].trim()) {
-    return nameMatch[1].trim();
+    const name = nameMatch[1].trim();
+    // Skip if name looks like a random code/subdomain (short alphanumeric)
+    if (name.length > 3 && !/^[a-z0-9]{2,4}$/i.test(name)) {
+      return name;
+    }
   }
 
   // Handle bounce addresses like "bounce+xxx@domain.com"
   if (from.includes("bounce")) {
-    const atIndex = from.lastIndexOf("@");
-    if (atIndex !== -1) {
-      const domain = from.substring(atIndex + 1);
+    const bounceAtIndex = from.lastIndexOf("@");
+    if (bounceAtIndex !== -1) {
+      const domain = from.substring(bounceAtIndex + 1);
       const domainName = domain.split(".")[0];
       return domainName.charAt(0).toUpperCase() + domainName.slice(1);
     }
   }
 
-  // Handle "noreply@domain.com" or similar
+  // Handle "noreply@domain.com" or similar - use domain name
   if (from.includes("noreply") || from.includes("no-reply")) {
-    const atIndex = from.lastIndexOf("@");
-    if (atIndex !== -1) {
-      const domain = from.substring(atIndex + 1);
-      const domainName = domain.split(".")[0];
-      return domainName.charAt(0).toUpperCase() + domainName.slice(1);
+    const noreplyAtIndex = from.lastIndexOf("@");
+    if (noreplyAtIndex !== -1) {
+      const domain = from.substring(noreplyAtIndex + 1);
+      const domainParts = domain.split(".");
+      // Skip subdomains like tm1, mail, etc. and get main domain
+      const mainDomain =
+        domainParts.length > 2
+          ? domainParts[domainParts.length - 2]
+          : domainParts[0];
+      return mainDomain.charAt(0).toUpperCase() + mainDomain.slice(1);
     }
   }
 
   // Default: return email username or truncated
-  const atIndex = from.indexOf("@");
-  if (atIndex !== -1 && atIndex > 15) {
+  const defaultAtIndex = from.indexOf("@");
+  if (defaultAtIndex !== -1 && defaultAtIndex > 15) {
     return from.substring(0, 15) + "...";
   }
 
-  if (atIndex !== -1) {
-    return from.substring(0, atIndex);
+  if (defaultAtIndex !== -1) {
+    return from.substring(0, defaultAtIndex);
   }
 
   return from;
@@ -519,7 +574,8 @@ export function InboxInterface({
     channel.subscribe("new-email", (message) => {
       // New email received! Refresh inbox
       fetchEmails();
-      toast.success(`Email baru dari ${message.data?.from || "someone"}`, {
+      const senderName = formatSenderName(message.data?.from || "");
+      toast.success(`Email baru dari ${senderName}`, {
         description: message.data?.subject || "(No Subject)",
       });
     });

@@ -14,13 +14,10 @@ interface SettingsDialogProps {
 }
 
 export const RETENTION_OPTIONS = [
-  { label: "30 Minutes", value: 1800 },
-  { label: "1 Hour", value: 3600 },
-  { label: "24 Hours", value: 86400 },
-  { label: "3 Days", value: 259200 },
+  { label: "1 Day", value: 86400 },
   { label: "1 Week", value: 604800 },
   { label: "1 Month", value: 2592000 },
-  { label: "Forever", value: -1 },
+  { label: "Permanent", value: -1 },
 ];
 
 export function SettingsDialog({
