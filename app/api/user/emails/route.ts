@@ -9,7 +9,6 @@ import { redis } from "@/lib/redis";
 /**
  * GET: Get all emails for authenticated user (sorted by newest first)
  * Security: Only returns emails owned by the authenticated user
- * Auto-cleanup: Removes emails that no longer exist in Redis
  */
 export async function GET() {
   try {
@@ -33,43 +32,16 @@ export async function GET() {
       .where(eq(userAddresses.userId, session.user.id))
       .orderBy(desc(userAddresses.createdAt));
 
-    // Check which emails still have inbox data in Redis
-    const validEmails: typeof emails = [];
-    const orphanedEmailIds: string[] = [];
-
-    for (const e of emails) {
-      const inboxKey = `inbox:${e.email.toLowerCase()}`;
-      const exists = await redis.exists(inboxKey);
-      
-      if (exists) {
-        validEmails.push(e);
-      } else {
-        // Mark for cleanup
-        orphanedEmailIds.push(e.id);
-      }
-    }
-
-    // Cleanup orphaned emails from PostgreSQL (async, don't wait)
-    if (orphanedEmailIds.length > 0) {
-      Promise.all(
-        orphanedEmailIds.map((id) =>
-          db.delete(userAddresses).where(
-            and(
-              eq(userAddresses.id, id),
-              eq(userAddresses.userId, session.user.id)
-            )
-          )
-        )
-      ).catch((err) => console.error("Orphan cleanup error:", err));
-    }
-
+    // Return all emails from PostgreSQL directly
+    // Note: The inbox:${email} key in Redis is only created when actual emails are received
+    // via webhook. Newly generated emails don't have inbox data yet, so we should NOT
+    // filter them out or treat them as orphaned.
     return NextResponse.json({
-      emails: validEmails.map((e) => ({
+      emails: emails.map((e) => ({
         email: e.email,
         recoveryToken: e.recoveryToken,
         retentionSeconds: e.retentionSeconds,
       })),
-      cleaned: orphanedEmailIds.length, // Info about how many were cleaned
     });
   } catch (error) {
     console.error("Get user emails error:", error);
