@@ -20,6 +20,10 @@ export const user = pgTable("user", {
   emailVerified: boolean("emailVerified").notNull(),
   image: text("image"),
   isAdmin: boolean("is_admin").default(false), // Custom field for admin access
+  // User approval system - new users need admin approval before login
+  approvalStatus: text("approval_status").default("approved"), // pending | approved | rejected
+  approvedAt: timestamp("approved_at"),
+  approvedBy: text("approved_by"), // Admin user ID who approved
   createdAt: timestamp("createdAt").notNull(),
   updatedAt: timestamp("updatedAt").notNull(),
 });

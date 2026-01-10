@@ -352,7 +352,7 @@ export function EmailGenerator({ onAliasCreated }: EmailGeneratorProps) {
                 />
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 max-w-[45%]">
                   <span
-                    className="text-sm text-muted-foreground truncate"
+                    className="text-sm text-muted-foreground truncate mr-1"
                     title={`@${domain}`}
                   >
                     @{domain}

@@ -33,6 +33,7 @@ import {
   XCircle,
   Info,
   ArrowRight,
+  Clock,
 } from "lucide-react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -54,8 +55,15 @@ export default function DashboardPage() {
   const [emailToDelete, setEmailToDelete] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Approval status state
+  const [approvalStatus, setApprovalStatus] = useState<string | null>(null);
+  const [checkingApproval, setCheckingApproval] = useState(true);
+
   // Domain management state
   const [savedDomains, setSavedDomains] = useState<string[]>(DEFAULT_DOMAINS);
+  const [userCustomDomains, setUserCustomDomains] = useState<
+    { domain: string; verified: boolean }[]
+  >([]);
   const [newDomain, setNewDomain] = useState("");
   const [showTutorial, setShowTutorial] = useState(false);
 
@@ -74,6 +82,51 @@ export default function DashboardPage() {
   const [domainsLoading, setDomainsLoading] = useState(true);
   const [addingDomain, setAddingDomain] = useState(false);
 
+  // Check approval status on mount
+  useEffect(() => {
+    const checkApprovalStatus = async () => {
+      if (!session) return;
+
+      try {
+        const res = await fetch("/api/user/approval-status");
+        const data = await res.json();
+
+        if (data.approvalStatus) {
+          setApprovalStatus(data.approvalStatus);
+
+          // If not approved, show message and sign out
+          if (data.approvalStatus === "pending") {
+            toast.error("Your account is pending admin approval.", {
+              duration: 5000,
+            });
+            setTimeout(async () => {
+              await signOut();
+              router.push("/auth/signin");
+            }, 3000);
+          } else if (data.approvalStatus === "rejected") {
+            toast.error("Your registration has been rejected.", {
+              duration: 5000,
+            });
+            setTimeout(async () => {
+              await signOut();
+              router.push("/auth/signin");
+            }, 3000);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to check approval status:", error);
+      } finally {
+        setCheckingApproval(false);
+      }
+    };
+
+    if (session) {
+      checkApprovalStatus();
+    } else {
+      setCheckingApproval(false);
+    }
+  }, [session, router]);
+
   // Fetch domains from API
   const fetchDomains = async () => {
     try {
@@ -82,12 +135,15 @@ export default function DashboardPage() {
       if (data.domains) {
         setSavedDomains(data.domains);
       }
-      // Load verified domains from API response
+      // Load user's custom domains (separate from global)
       if (data.customDomains) {
+        setUserCustomDomains(data.customDomains);
         const verified = data.customDomains
           .filter((d: { domain: string; verified: boolean }) => d.verified)
           .map((d: { domain: string }) => d.domain);
         setVerifiedDomains(new Set(verified));
+      } else {
+        setUserCustomDomains([]);
       }
     } catch (error) {
       console.error("Error fetching domains:", error);
@@ -103,11 +159,11 @@ export default function DashboardPage() {
   }, [isPending, session, router]);
 
   useEffect(() => {
-    if (session) {
+    if (session && approvalStatus === "approved") {
       fetchEmails();
       fetchDomains();
     }
-  }, [session]);
+  }, [session, approvalStatus]);
 
   const fetchEmails = async () => {
     try {
@@ -127,6 +183,52 @@ export default function DashboardPage() {
     navigator.clipboard.writeText(text);
     toast.success(`${label} copied!`);
   };
+
+  // Show pending approval screen
+  if (session && (approvalStatus === "pending" || checkingApproval)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-background/50 p-4">
+        <div className="glass-card rounded-2xl p-8 max-w-md w-full text-center space-y-6">
+          <div className="h-16 w-16 mx-auto rounded-full bg-amber-500/20 flex items-center justify-center">
+            <Clock className="h-8 w-8 text-amber-400" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-white mb-2">
+              Pending Approval
+            </h2>
+            <p className="text-muted-foreground text-sm">
+              Your account is waiting for admin approval. You will be redirected
+              shortly.
+            </p>
+          </div>
+          <Loader2 className="h-6 w-6 animate-spin mx-auto text-amber-400" />
+        </div>
+      </div>
+    );
+  }
+
+  // Show rejected screen
+  if (session && approvalStatus === "rejected") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-background/50 p-4">
+        <div className="glass-card rounded-2xl p-8 max-w-md w-full text-center space-y-6">
+          <div className="h-16 w-16 mx-auto rounded-full bg-red-500/20 flex items-center justify-center">
+            <XCircle className="h-8 w-8 text-red-400" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-white mb-2">
+              Registration Rejected
+            </h2>
+            <p className="text-muted-foreground text-sm">
+              Your registration has been rejected. Please contact support for
+              assistance.
+            </p>
+          </div>
+          <Loader2 className="h-6 w-6 animate-spin mx-auto text-red-400" />
+        </div>
+      </div>
+    );
+  }
 
   const handleSignOut = async () => {
     await signOut();
@@ -226,9 +328,8 @@ export default function DashboardPage() {
     }
   };
 
-  const customDomains = savedDomains.filter(
-    (d) => !DEFAULT_DOMAINS.includes(d)
-  );
+  // Only show user's own custom domains (not global domains)
+  const customDomains = userCustomDomains.map((d) => d.domain);
 
   // Domain verification function
   const verifyDomain = async (domain: string) => {
@@ -490,8 +591,6 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          
-
           {/* Add Domain Form */}
           <form onSubmit={handleAddDomain} className="space-y-3">
             <Input
@@ -585,19 +684,6 @@ export default function DashboardPage() {
 
           {/* Domain List */}
           <div className="space-y-2">
-            {/* Default Domain */}
-            <div className="flex items-center justify-between p-3 rounded-lg bg-black/20 border border-white/5">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-green-400" />
-                <span className="font-medium text-sm text-white">
-                  {DEFAULT_DOMAINS[0]}
-                </span>
-              </div>
-              <span className="text-xs bg-white/10 text-muted-foreground px-2 py-1 rounded">
-                Default
-              </span>
-            </div>
-
             {/* Custom Domains */}
             {customDomains.map((domain) => (
               <div
@@ -655,8 +741,6 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
-
-
       </div>
 
       {/* Delete Confirmation Dialog */}

@@ -41,7 +41,26 @@ export default function SignIn() {
       });
 
       if (result.error) {
-        toast.error(result.error.message || "Sign in failed");
+        // Handle approval status errors
+        const errorMessage = result.error.message || "";
+
+        if (errorMessage.includes("PENDING_APPROVAL")) {
+          toast.error(
+            "Your account is pending approval. Please wait for admin confirmation.",
+            {
+              duration: 5000,
+            }
+          );
+        } else if (errorMessage.includes("REGISTRATION_REJECTED")) {
+          toast.error(
+            "Your registration has been rejected. Please contact support.",
+            {
+              duration: 5000,
+            }
+          );
+        } else {
+          toast.error(errorMessage || "Sign in failed");
+        }
       } else {
         router.push("/dashboard");
       }

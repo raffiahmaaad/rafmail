@@ -148,22 +148,48 @@ export async function DELETE(request: NextRequest) {
       ),
     ]);
 
-    // Also delete all related Redis keys
-    const keysToDelete = [
-      `inbox:${normalizedEmail}`,           // Email inbox
-      `settings:${normalizedEmail}`,        // Email settings  
-      `email:${normalizedEmail}:token`,     // Recovery token
+    // ========================================
+    // COMPLETE REDIS CLEANUP (All 6 keys)
+    // ========================================
+    
+    // Keys that can be deleted directly
+    const directKeys = [
+      `inbox:${normalizedEmail}`,           // 1. Email inbox
+      `settings:${normalizedEmail}`,        // 2. Email settings  
+      `email:${normalizedEmail}:token`,     // 3. Recovery token (by email)
+      `email-session:${normalizedEmail}`,   // 4. Email session mapping
     ];
 
-    // Delete each Redis key (some might not exist, that's ok)
+    // Lookup keys that need to be retrieved first before deletion
+    const additionalKeysToDelete: string[] = [];
+    
+    // 5. Get recovery token to find and delete recovery:${tokenId}
+    const recoveryToken = await redis.get(`email:${normalizedEmail}:token`);
+    if (recoveryToken && typeof recoveryToken === 'string') {
+      const [tokenId] = recoveryToken.split('.');
+      if (tokenId) {
+        additionalKeysToDelete.push(`recovery:${tokenId}`);
+      }
+    }
+
+    // 6. Get session token to find and delete mailbox-session:${sessionToken}
+    const sessionToken = await redis.get(`email-session:${normalizedEmail}`);
+    if (sessionToken && typeof sessionToken === 'string') {
+      additionalKeysToDelete.push(`mailbox-session:${sessionToken}`);
+    }
+
+    // Combine all keys to delete
+    const allKeysToDelete = [...directKeys, ...additionalKeysToDelete];
+
+    // Delete all Redis keys (some might not exist, that's ok)
     await Promise.all(
-      keysToDelete.map((key) => redis.del(key).catch(() => {}))
+      allKeysToDelete.map((key) => redis.del(key).catch(() => {}))
     );
 
     return NextResponse.json({ 
       success: true, 
       deletedFromPostgres: ['userAddresses', 'userEmailHistory', 'userMailboxSessions'],
-      deletedRedisKeys: keysToDelete 
+      deletedRedisKeys: allKeysToDelete 
     });
   } catch (error) {
     console.error("Delete email error:", error);

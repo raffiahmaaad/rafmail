@@ -35,6 +35,11 @@ import {
   User,
   Star,
   Infinity,
+  UserCheck,
+  UserX,
+  Clock,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -63,6 +68,17 @@ interface GlobalDomain {
   createdAt: string;
 }
 
+interface UserData {
+  id: string;
+  name: string;
+  email: string;
+  approvalStatus: string;
+  isAdmin: boolean;
+  createdAt: string;
+  approvedAt?: string;
+  approvedBy?: string;
+}
+
 export default function AdminPage() {
   // Auth state
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -87,20 +103,39 @@ export default function AdminPage() {
   const [newDomain, setNewDomain] = useState("");
   const [addingDomain, setAddingDomain] = useState(false);
 
+  // User management state
+  const [users, setUsers] = useState<UserData[]>([]);
+  const [userStats, setUserStats] = useState({
+    total: 0,
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+  });
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [processingUser, setProcessingUser] = useState<string | null>(null);
+
   // Confirm dialog state
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     title: string;
     message: string;
+    variant: "delete" | "confirm";
     onConfirm: () => void;
-  }>({ open: false, title: "", message: "", onConfirm: () => {} });
+  }>({
+    open: false,
+    title: "",
+    message: "",
+    variant: "confirm",
+    onConfirm: () => {},
+  });
 
   const showConfirm = (
     title: string,
     message: string,
-    onConfirm: () => void
+    onConfirm: () => void,
+    variant: "delete" | "confirm" = "confirm"
   ) => {
-    setConfirmDialog({ open: true, title, message, onConfirm });
+    setConfirmDialog({ open: true, title, message, variant, onConfirm });
   };
 
   // Check existing session on load
@@ -125,6 +160,7 @@ export default function AdminPage() {
   const fetchData = () => {
     fetchEmails();
     fetchDomains();
+    fetchUsers();
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -193,6 +229,96 @@ export default function AdminPage() {
     }
   };
 
+  const fetchUsers = async () => {
+    setLoadingUsers(true);
+    try {
+      const res = await fetch("/api/admin/users");
+      const data = await res.json();
+      if (data.users) {
+        setUsers(data.users);
+        setUserStats(data.stats);
+      }
+    } catch (error) {
+      toast.error("Failed to fetch users");
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const approveUser = async (userId: string) => {
+    setProcessingUser(userId);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, action: "approve" }),
+      });
+
+      if (res.ok) {
+        toast.success("User approved!");
+        fetchUsers();
+      } else {
+        toast.error("Failed to approve user");
+      }
+    } catch (error) {
+      toast.error("Failed to approve user");
+    } finally {
+      setProcessingUser(null);
+    }
+  };
+
+  const rejectUser = async (userId: string) => {
+    setProcessingUser(userId);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, action: "reject" }),
+      });
+
+      if (res.ok) {
+        toast.success("User rejected");
+        fetchUsers();
+      } else {
+        toast.error("Failed to reject user");
+      }
+    } catch (error) {
+      toast.error("Failed to reject user");
+    } finally {
+      setProcessingUser(null);
+    }
+  };
+
+  const deleteUser = (userId: string) => {
+    const user = users.find((u) => u.id === userId);
+    showConfirm(
+      "Delete User",
+      `Are you sure you want to delete ${user?.email || "this user"}? This action cannot be undone.`,
+      async () => {
+        setProcessingUser(userId);
+        try {
+          const res = await fetch("/api/admin/users", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId }),
+          });
+
+          if (res.ok) {
+            toast.success("User deleted");
+            fetchUsers();
+          } else {
+            toast.error("Failed to delete user");
+          }
+        } catch (error) {
+          toast.error("Failed to delete user");
+        } finally {
+          setProcessingUser(null);
+        }
+      },
+      "delete"
+    );
+  };
+
   const viewInbox = async (address: string) => {
     setViewingInbox(address);
     setLoadingInbox(true);
@@ -209,25 +335,30 @@ export default function AdminPage() {
     }
   };
 
-  const deleteEmail = async (address: string) => {
-    if (!confirm(`Delete ${address} and all its emails?`)) return;
+  const deleteEmail = (address: string) => {
+    showConfirm(
+      "Delete Email",
+      `Are you sure you want to delete ${address} and all its emails? This action cannot be undone.`,
+      async () => {
+        try {
+          const res = await fetch("/api/admin/emails", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ address }),
+          });
 
-    try {
-      const res = await fetch("/api/admin/emails", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address }),
-      });
-
-      if (res.ok) {
-        setEmails(emails.filter((e) => e.address !== address));
-        toast.success("Email deleted");
-      } else {
-        toast.error("Failed to delete");
-      }
-    } catch (error) {
-      toast.error("Failed to delete");
-    }
+          if (res.ok) {
+            setEmails(emails.filter((e) => e.address !== address));
+            toast.success("Email deleted");
+          } else {
+            toast.error("Failed to delete");
+          }
+        } catch (error) {
+          toast.error("Failed to delete");
+        }
+      },
+      "delete"
+    );
   };
 
   const addDomain = async () => {
@@ -257,25 +388,30 @@ export default function AdminPage() {
     }
   };
 
-  const deleteDomain = async (domain: string) => {
-    if (!confirm(`Delete domain ${domain}?`)) return;
+  const deleteDomain = (domain: string) => {
+    showConfirm(
+      "Delete Domain",
+      `Are you sure you want to delete the domain "${domain}"? This action cannot be undone.`,
+      async () => {
+        try {
+          const res = await fetch("/api/admin/domains", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ domain }),
+          });
 
-    try {
-      const res = await fetch("/api/admin/domains", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain }),
-      });
-
-      if (res.ok) {
-        setDomains(domains.filter((d) => d.domain !== domain));
-        toast.success("Domain deleted");
-      } else {
-        toast.error("Failed to delete");
-      }
-    } catch (error) {
-      toast.error("Failed to delete");
-    }
+          if (res.ok) {
+            setDomains(domains.filter((d) => d.domain !== domain));
+            toast.success("Domain deleted");
+          } else {
+            toast.error("Failed to delete");
+          }
+        } catch (error) {
+          toast.error("Failed to delete");
+        }
+      },
+      "delete"
+    );
   };
 
   const setDefaultDomain = async (domain: string) => {
@@ -803,6 +939,178 @@ export default function AdminPage() {
             )}
           </div>
         </div>
+
+        {/* User Management Section */}
+        <div className="glass-card rounded-xl sm:rounded-2xl p-6 sm:p-8 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+              <User className="h-5 w-5" />
+              User Management
+              {userStats.pending > 0 && (
+                <span className="ml-2 bg-amber-500/20 text-amber-400 text-xs px-2 py-1 rounded-full animate-pulse">
+                  {userStats.pending} pending
+                </span>
+              )}
+            </h2>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={fetchUsers}
+              disabled={loadingUsers}
+              className="h-8 w-8"
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${loadingUsers ? "animate-spin" : ""}`}
+              />
+            </Button>
+          </div>
+
+          {/* User Stats */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="bg-black/20 rounded-lg p-3 border border-white/5">
+              <p className="text-lg font-bold text-white">{userStats.total}</p>
+              <p className="text-xs text-muted-foreground">Total</p>
+            </div>
+            <div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
+              <p className="text-lg font-bold text-amber-400">
+                {userStats.pending}
+              </p>
+              <p className="text-xs text-amber-400/70">Pending</p>
+            </div>
+            <div className="bg-green-500/10 rounded-lg p-3 border border-green-500/20">
+              <p className="text-lg font-bold text-green-400">
+                {userStats.approved}
+              </p>
+              <p className="text-xs text-green-400/70">Approved</p>
+            </div>
+            <div className="bg-red-500/10 rounded-lg p-3 border border-red-500/20">
+              <p className="text-lg font-bold text-red-400">
+                {userStats.rejected}
+              </p>
+              <p className="text-xs text-red-400/70">Rejected</p>
+            </div>
+          </div>
+
+          {/* User List */}
+          <div className="space-y-2 max-h-[400px] overflow-y-auto">
+            {loadingUsers ? (
+              <div className="text-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin mx-auto text-white/50" />
+              </div>
+            ) : users.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No users found
+              </div>
+            ) : (
+              users.map((u) => (
+                <div
+                  key={u.id}
+                  className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg border transition-colors gap-3 ${
+                    u.approvalStatus === "pending"
+                      ? "bg-amber-500/10 border-amber-500/30"
+                      : u.approvalStatus === "rejected"
+                        ? "bg-red-500/5 border-red-500/20"
+                        : "bg-black/20 border-white/5"
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div
+                      className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                        u.approvalStatus === "pending"
+                          ? "bg-amber-500/20"
+                          : u.approvalStatus === "approved"
+                            ? "bg-green-500/20"
+                            : "bg-red-500/20"
+                      }`}
+                    >
+                      {u.approvalStatus === "pending" ? (
+                        <Clock className="h-4 w-4 text-amber-400" />
+                      ) : u.approvalStatus === "approved" ? (
+                        <CheckCircle className="h-4 w-4 text-green-400" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-red-400" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className="font-medium text-white truncate"
+                        title={u.email}
+                      >
+                        {u.email}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {u.name} • {new Date(u.createdAt).toLocaleDateString()}
+                        {u.isAdmin && (
+                          <span className="ml-2 text-purple-400">(Admin)</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 justify-end sm:justify-start">
+                    {u.approvalStatus === "pending" && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => approveUser(u.id)}
+                          disabled={processingUser === u.id}
+                          className="h-8 text-xs text-green-400 hover:text-green-300 hover:bg-green-500/10"
+                        >
+                          {processingUser === u.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <>
+                              <UserCheck className="h-3 w-3 mr-1" />
+                              Approve
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => rejectUser(u.id)}
+                          disabled={processingUser === u.id}
+                          className="h-8 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                        >
+                          <UserX className="h-3 w-3 mr-1" />
+                          Reject
+                        </Button>
+                      </>
+                    )}
+                    {u.approvalStatus === "rejected" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => approveUser(u.id)}
+                        disabled={processingUser === u.id}
+                        className="h-8 text-xs text-green-400 hover:text-green-300 hover:bg-green-500/10"
+                      >
+                        {processingUser === u.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <>
+                            <UserCheck className="h-3 w-3 mr-1" />
+                            Approve
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteUser(u.id)}
+                      disabled={processingUser === u.id}
+                      className="h-8 w-8 text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
+                      title="Delete user"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Inbox Viewer Dialog */}
@@ -865,8 +1173,18 @@ export default function AdminPage() {
           >
             <div className="glass-card rounded-2xl border border-white/10 p-6 space-y-4">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-green-500/20 flex items-center justify-center">
-                  <Infinity className="h-5 w-5 text-green-400" />
+                <div
+                  className={`h-10 w-10 rounded-full flex items-center justify-center ${
+                    confirmDialog.variant === "delete"
+                      ? "bg-red-500/20"
+                      : "bg-green-500/20"
+                  }`}
+                >
+                  {confirmDialog.variant === "delete" ? (
+                    <Trash2 className="h-5 w-5 text-red-400" />
+                  ) : (
+                    <Infinity className="h-5 w-5 text-green-400" />
+                  )}
                 </div>
                 <h3 className="text-lg font-semibold text-white">
                   {confirmDialog.title}
@@ -888,14 +1206,27 @@ export default function AdminPage() {
                   Cancel
                 </Button>
                 <Button
-                  className="flex-1 h-11 bg-green-500 hover:bg-green-600 text-white"
+                  className={`flex-1 h-11 text-white ${
+                    confirmDialog.variant === "delete"
+                      ? "bg-red-500 hover:bg-red-600"
+                      : "bg-green-500 hover:bg-green-600"
+                  }`}
                   onClick={() => {
                     confirmDialog.onConfirm();
                     setConfirmDialog({ ...confirmDialog, open: false });
                   }}
                 >
-                  <Infinity className="h-4 w-4 mr-2" />
-                  Confirm
+                  {confirmDialog.variant === "delete" ? (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </>
+                  ) : (
+                    <>
+                      <Infinity className="h-4 w-4 mr-2" />
+                      Confirm
+                    </>
+                  )}
                 </Button>
               </div>
             </div>

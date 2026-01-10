@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { userDomains, globalDomains } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { headers } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -9,6 +9,8 @@ const DEFAULT_DOMAINS = ["rafxyz.web.id"];
 
 /**
  * GET: Fetch user's custom domains + global domains from PostgreSQL
+ * - domains: All available domains for email generation (global + custom)
+ * - customDomains: Only user's own added domains (NOT global)
  */
 export async function GET() {
   try {
@@ -36,13 +38,13 @@ export async function GET() {
       const allDomains = [...DEFAULT_DOMAINS, ...globalDomainNames];
       return NextResponse.json({
         domains: [...new Set(allDomains)], // deduplicate
-        customDomains: [],
+        customDomains: [], // No custom domains for guests
         defaultDomain,
       });
     }
 
-    // Logged in: include user's custom domains
-    const domains = await db
+    // Logged in: get user's custom domains (separate from global)
+    const userCustomDomains = await db
       .select({
         domain: userDomains.domain,
         verified: userDomains.verified,
@@ -50,12 +52,13 @@ export async function GET() {
       .from(userDomains)
       .where(eq(userDomains.userId, session.user.id));
 
-    const customDomains = domains.map((d) => d.domain);
-    const allDomains = [...DEFAULT_DOMAINS, ...globalDomainNames, ...customDomains];
+    // For email generation: combine global + custom domains
+    const customDomainNames = userCustomDomains.map((d) => d.domain);
+    const allDomains = [...DEFAULT_DOMAINS, ...globalDomainNames, ...customDomainNames];
 
     return NextResponse.json({
-      domains: [...new Set(allDomains)], // deduplicate
-      customDomains: domains,
+      domains: [...new Set(allDomains)], // All available for email generation
+      customDomains: userCustomDomains, // Only user's custom domains for management UI
       defaultDomain,
     });
   } catch (error) {
@@ -69,6 +72,8 @@ export async function GET() {
 
 /**
  * POST: Add a new custom domain
+ * - Cannot add global/default domains
+ * - Cannot add domain already used by another user
  */
 export async function POST(request: NextRequest) {
   try {
@@ -105,20 +110,56 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Upsert domain
-    await db
-      .insert(userDomains)
-      .values({
-        userId: session.user.id,
-        domain: cleanDomain,
-        verified: verified ?? false,
-      })
-      .onConflictDoUpdate({
-        target: [userDomains.userId, userDomains.domain],
-        set: {
-          verified: verified ?? false,
-        },
-      });
+    // Check if domain exists in global domains
+    const existingGlobal = await db
+      .select({ domain: globalDomains.domain })
+      .from(globalDomains)
+      .where(eq(globalDomains.domain, cleanDomain))
+      .limit(1);
+
+    if (existingGlobal.length > 0) {
+      return NextResponse.json(
+        { error: "This is a public domain managed by admin. You can use it but cannot add it." },
+        { status: 400 }
+      );
+    }
+
+    // Check if domain is already taken by ANY user
+    const existingUserDomain = await db
+      .select({ userId: userDomains.userId })
+      .from(userDomains)
+      .where(eq(userDomains.domain, cleanDomain))
+      .limit(1);
+
+    if (existingUserDomain.length > 0) {
+      // If it's the same user, just update
+      if (existingUserDomain[0].userId === session.user.id) {
+        // Update existing domain
+        await db
+          .update(userDomains)
+          .set({ verified: verified ?? false })
+          .where(
+            and(
+              eq(userDomains.userId, session.user.id),
+              eq(userDomains.domain, cleanDomain)
+            )
+          );
+        return NextResponse.json({ success: true, domain: cleanDomain, updated: true });
+      }
+      
+      // Domain taken by another user
+      return NextResponse.json(
+        { error: "This domain is already registered by another user" },
+        { status: 400 }
+      );
+    }
+
+    // Insert new domain
+    await db.insert(userDomains).values({
+      userId: session.user.id,
+      domain: cleanDomain,
+      verified: verified ?? false,
+    });
 
     return NextResponse.json({ success: true, domain: cleanDomain });
   } catch (error) {
@@ -162,8 +203,10 @@ export async function DELETE(request: NextRequest) {
     await db
       .delete(userDomains)
       .where(
-        eq(userDomains.userId, session.user.id) &&
+        and(
+          eq(userDomains.userId, session.user.id),
           eq(userDomains.domain, cleanDomain)
+        )
       );
 
     return NextResponse.json({ success: true });
@@ -175,3 +218,4 @@ export async function DELETE(request: NextRequest) {
     );
   }
 }
+

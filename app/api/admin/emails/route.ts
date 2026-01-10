@@ -106,7 +106,9 @@ export async function GET() {
 }
 
 /**
- * DELETE - Delete an email address and its inbox
+ * DELETE - Delete an email address and ALL related data (complete cleanup)
+ * Deletes from PostgreSQL: userAddresses, userEmailHistory, userMailboxSessions
+ * Deletes from Redis: inbox, settings, email:token, recovery:tokenId, email-session, mailbox-session
  */
 export async function DELETE(req: Request) {
   const isAdmin = await checkAdminAccess();
@@ -123,15 +125,59 @@ export async function DELETE(req: Request) {
 
     const normalizedAddress = address.toLowerCase();
 
-    // Delete from Redis (inbox and related keys)
-    await redis.del(`inbox:${normalizedAddress}`);
-    await redis.del(`email:${normalizedAddress}:token`);
-    await redis.del(`settings:${normalizedAddress}`);
+    // Import additional schemas dynamically to avoid circular deps
+    const { userEmailHistory, userMailboxSessions } = await import("@/lib/schema");
 
-    // Delete from database
-    await db.delete(userAddresses).where(eq(userAddresses.email, address));
+    // Delete from all PostgreSQL tables
+    await Promise.all([
+      db.delete(userAddresses).where(eq(userAddresses.email, normalizedAddress)),
+      db.delete(userEmailHistory).where(eq(userEmailHistory.email, normalizedAddress)),
+      db.delete(userMailboxSessions).where(eq(userMailboxSessions.email, normalizedAddress)),
+    ]);
 
-    return NextResponse.json({ success: true });
+    // ========================================
+    // COMPLETE REDIS CLEANUP (All 6 keys)
+    // ========================================
+    
+    // Keys that can be deleted directly
+    const directKeys = [
+      `inbox:${normalizedAddress}`,           // 1. Email inbox
+      `settings:${normalizedAddress}`,        // 2. Email settings  
+      `email:${normalizedAddress}:token`,     // 3. Recovery token (by email)
+      `email-session:${normalizedAddress}`,   // 4. Email session mapping
+    ];
+
+    // Lookup keys that need to be retrieved first before deletion
+    const additionalKeysToDelete: string[] = [];
+    
+    // 5. Get recovery token to find and delete recovery:${tokenId}
+    const recoveryToken = await redis.get(`email:${normalizedAddress}:token`);
+    if (recoveryToken && typeof recoveryToken === 'string') {
+      const [tokenId] = recoveryToken.split('.');
+      if (tokenId) {
+        additionalKeysToDelete.push(`recovery:${tokenId}`);
+      }
+    }
+
+    // 6. Get session token to find and delete mailbox-session:${sessionToken}
+    const sessionToken = await redis.get(`email-session:${normalizedAddress}`);
+    if (sessionToken && typeof sessionToken === 'string') {
+      additionalKeysToDelete.push(`mailbox-session:${sessionToken}`);
+    }
+
+    // Combine all keys to delete
+    const allKeysToDelete = [...directKeys, ...additionalKeysToDelete];
+
+    // Delete all Redis keys (some might not exist, that's ok)
+    await Promise.all(
+      allKeysToDelete.map((key) => redis.del(key).catch(() => {}))
+    );
+
+    return NextResponse.json({ 
+      success: true,
+      deletedFromPostgres: ['userAddresses', 'userEmailHistory', 'userMailboxSessions'],
+      deletedRedisKeys: allKeysToDelete
+    });
   } catch (error) {
     console.error("Admin email delete error:", error);
     return NextResponse.json(
@@ -140,3 +186,4 @@ export async function DELETE(req: Request) {
     );
   }
 }
+
